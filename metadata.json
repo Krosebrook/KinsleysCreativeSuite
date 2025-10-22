@@ -1,0 +1,7 @@
+{
+  "name": "Gemini Creative Suite",
+  "description": "An all-in-one creative app powered by Gemini. Generate coloring books, edit images with text prompts, create videos from photos, and have real-time voice conversations with an AI assistant.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

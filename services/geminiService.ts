@@ -1,0 +1,307 @@
+import { GoogleGenAI, Chat, Modality, Type } from "@google/genai";
+import type { Message } from "../types";
+
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+
+/**
+ * A centralized error handler for Gemini API calls.
+ * @param error The error caught from a try-catch block.
+ * @param context A string describing the operation that failed (e.g., 'Image Editing').
+ * @returns A new Error object with a user-friendly message.
+ */
+const handleApiError = (error: unknown, context: string): Error => {
+    console.error(`API Error in ${context}:`, error);
+
+    let errorMessage = `An unexpected error occurred during ${context}.`;
+    let messageToInspect = '';
+
+    if (error instanceof Error) {
+        messageToInspect = error.message;
+    } else if (typeof error === 'string') {
+        messageToInspect = error;
+    } else {
+        // Attempt to stringify for more complex error objects
+        try {
+            messageToInspect = JSON.stringify(error);
+        } catch {
+            messageToInspect = 'An unreadable error occurred.';
+        }
+    }
+    
+    const lowerCaseMessage = messageToInspect.toLowerCase();
+
+    if (lowerCaseMessage.includes('failed to fetch')) {
+        errorMessage = 'A network error occurred. Please check your internet connection and try again.';
+    } else if (lowerCaseMessage.includes('api key not valid') || lowerCaseMessage.includes('api_key_invalid')) {
+        errorMessage = 'Your API key is invalid or missing. Please check your configuration.';
+    } else if (lowerCaseMessage.includes('quota')) {
+        errorMessage = 'You have exceeded your API quota. Please check your usage and billing details.';
+    } else if (lowerCaseMessage.includes('safety') || lowerCaseMessage.includes('blocked')) {
+        errorMessage = 'Your request was blocked due to safety settings. Please adjust your prompt and try again.';
+    } else if (lowerCaseMessage.includes('400 bad request') || lowerCaseMessage.includes('invalid argument')) {
+        errorMessage = 'The request was invalid. Please check your input parameters.';
+    } else if (lowerCaseMessage.includes('503') || lowerCaseMessage.includes('model is overloaded')) {
+        errorMessage = 'The AI model is currently overloaded or unavailable. Please try again in a few moments.';
+    } else if (lowerCaseMessage.includes("not found")) {
+        // Special handling for Veo's key selection flow
+        if (context === 'Video Generation') {
+             errorMessage = "API key not found or invalid. Please re-select your API key and try again.";
+        } else {
+             errorMessage = 'The requested resource was not found.';
+        }
+    }
+
+    return new Error(errorMessage);
+};
+
+// --- Chat Functions ---
+
+export const createChat = (): Chat => {
+  return ai.chats.create({
+    model: 'gemini-2.5-flash',
+    config: {
+      systemInstruction: 'You are a friendly and helpful creative assistant for the Gemini Creative Suite.',
+    },
+  });
+};
+
+export const groundedChat = async (message: string): Promise<Message> => {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: message,
+      config: {
+        tools: [{googleSearch: {}}],
+      },
+    });
+
+    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks
+        ?.map((chunk: any) => chunk.web)
+        .filter(Boolean) || [];
+    
+    return {
+        role: 'model',
+        text: response.text,
+        sources: sources,
+    };
+  } catch (error) {
+    throw handleApiError(error, 'Grounded Chat');
+  }
+};
+
+// --- Story Booster Functions ---
+
+export const analyzeText = async (text: string): Promise<string> => {
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-pro',
+            contents: `Please analyze the following story text. Provide feedback on its strengths and weaknesses, focusing on plot, character development, pacing, and overall engagement. Format your response using markdown with headings for each section. Here is the text: "${text}"`,
+        });
+        return response.text;
+    } catch (error) {
+        throw handleApiError(error, 'Text Analysis');
+    }
+};
+
+export const improveText = async (text: string): Promise<string> => {
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-pro',
+            contents: `Please improve the following story text. Enhance the prose, fix any grammatical errors, and make it more engaging, while preserving the original plot and tone. Here is the text: "${text}"`,
+        });
+        return response.text;
+    } catch (error) {
+        throw handleApiError(error, 'Text Improvement');
+    }
+};
+
+export const suggestTitles = async (text: string): Promise<string[]> => {
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `Suggest 5 creative titles for the following story. Return the titles as a JSON object with a "titles" key containing an array of strings. Story: "${text}"`,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        titles: {
+                            type: Type.ARRAY,
+                            items: { type: Type.STRING }
+                        }
+                    },
+                    required: ["titles"],
+                }
+            }
+        });
+
+        const jsonResponse = JSON.parse(response.text.trim());
+        return jsonResponse.titles || [];
+    } catch (error) {
+        throw handleApiError(error, 'Title Suggestion');
+    }
+};
+
+export const generateStoryIdea = async (prompt: string): Promise<string> => {
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `Write a short story starter (around 100-150 words) based on this prompt: "${prompt}"`,
+        });
+        return response.text;
+    } catch (error) {
+        throw handleApiError(error, 'Story Idea Generation');
+    }
+};
+
+// --- Image Generation/Editing Functions ---
+
+const generateColoringPage = async (prompt: string): Promise<string> => {
+    const response = await ai.models.generateImages({
+        model: 'imagen-4.0-generate-001',
+        prompt,
+        config: {
+          numberOfImages: 1,
+          outputMimeType: 'image/png',
+          aspectRatio: '4:3',
+        },
+    });
+    return response.generatedImages[0].image.imageBytes;
+};
+
+export const generateColoringPages = async (
+  theme: string,
+  childName: string,
+  numPages: number,
+  borderStyle: string,
+  subtitle: string,
+  artStyle: string
+): Promise<{ cover: string; pages: string[] }> => {
+    try {
+        const coverPrompt = `Create a fun, kid-friendly coloring book cover. The title should be '${childName}'s Coloring Adventure'. The theme is '${theme}'. The style should be ${artStyle}, black and white line art, suitable for coloring. Add a decorative border of ${borderStyle}. ${subtitle ? `Include the subtitle: '${subtitle}'.` : ''}`;
+        
+        const pagePrompts = Array.from({ length: numPages }, (_, i) => 
+            `A single, clear coloring book page for a child. The theme is '${theme}'. The style should be simple ${artStyle}, black and white line art with thick outlines. The scene should be simple and easy to color. Scene idea ${i + 1} of ${numPages}.`
+        );
+
+        const [cover, ...pages] = await Promise.all([
+            generateColoringPage(coverPrompt),
+            ...pagePrompts.map(prompt => generateColoringPage(prompt))
+        ]);
+
+        return { cover, pages };
+    } catch (error) {
+        throw handleApiError(error, 'Coloring Page Generation');
+    }
+};
+
+export const editImage = async (
+  base64ImageData: string,
+  mimeType: string,
+  prompt: string
+): Promise<string> => {
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              data: base64ImageData,
+              mimeType: mimeType,
+            },
+          },
+          {
+            text: prompt,
+          },
+        ],
+      },
+      config: {
+        responseModalities: [Modality.IMAGE],
+      },
+    });
+
+    for (const part of response.candidates[0].content.parts) {
+      if (part.inlineData) {
+        return part.inlineData.data;
+      }
+    }
+    throw new Error("No image was returned from the model.");
+  } catch (error) {
+    throw handleApiError(error, 'Image Editing');
+  }
+};
+
+// --- Video Generation Functions ---
+
+const mapVeoStateToMessage = (state: string | undefined): string => {
+    switch (state) {
+        case 'GENERATE_VIDEOS_STATE_PENDING':
+            return 'Request pending, preparing for generation...';
+        case 'GENERATE_VIDEOS_STATE_GENERATING':
+            return 'Generating video frames... this is the longest step.';
+        case 'GENERATE_VIDEOS_STATE_ENCODING':
+            return 'Encoding video...';
+        case 'GENERATE_VIDEOS_STATE_UPLOADING':
+            return 'Finalizing and uploading video...';
+        default:
+            return 'Checking generation status...';
+    }
+};
+
+export const generateVideo = async (
+  base64ImageData: string,
+  mimeType: string,
+  prompt: string,
+  aspectRatio: '16:9' | '9:16',
+  onProgress: (message: string) => void
+): Promise<string> => {
+  const videoAi = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+  
+  try {
+    onProgress("Sending request to the video model...");
+    let operation = await videoAi.models.generateVideos({
+      model: 'veo-3.1-fast-generate-preview',
+      prompt: prompt,
+      image: {
+        imageBytes: base64ImageData,
+        mimeType: mimeType,
+      },
+      config: {
+        numberOfVideos: 1,
+        resolution: '720p',
+        aspectRatio: aspectRatio,
+      }
+    });
+
+    onProgress("Video generation started. This can take a few minutes...");
+    
+    while (!operation.done) {
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      operation = await videoAi.operations.getVideosOperation({operation: operation});
+      
+      const message = mapVeoStateToMessage(operation.metadata?.state as string);
+      onProgress(message);
+    }
+
+    onProgress("Video processing complete! Fetching download link...");
+    const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+    
+    if (!downloadLink) {
+      throw new Error("Video generation succeeded but no download link was found.");
+    }
+
+    onProgress("Downloading video...");
+    const response = await fetch(`${downloadLink}&key=${process.env.API_KEY!}`);
+    if (!response.ok) {
+        throw new Error(`Failed to download video file. Status: ${response.statusText}`);
+    }
+    const videoBlob = await response.blob();
+    const videoUrl = URL.createObjectURL(videoBlob);
+    
+    return videoUrl;
+
+  } catch (error) {
+    throw handleApiError(error, 'Video Generation');
+  }
+};
