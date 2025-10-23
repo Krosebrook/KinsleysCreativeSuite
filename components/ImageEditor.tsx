@@ -1,16 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { editImage } from '../services/geminiService';
 import { fileToBase64 } from '../utils/helpers';
-import { LoaderIcon, SparklesIcon, UndoIcon, RedoIcon, ImageIcon } from './icons';
+import { LoaderIcon, SparklesIcon, UndoIcon, RedoIcon, ImageIcon, SaveIcon, FolderOpenIcon } from './icons';
+
+const LOCAL_STORAGE_KEY = 'imageEditorSession';
 
 export const ImageEditor: React.FC = () => {
-    const [originalImage, setOriginalImage] = useState<{ b64: string; file: File } | null>(null);
+    const [imageData, setImageData] = useState<{ b64: string; type: string } | null>(null);
     const [history, setHistory] = useState<string[]>([]);
     const [historyIndex, setHistoryIndex] = useState(-1);
+    const [hasSavedSession, setHasSavedSession] = useState(false);
     
     const [prompt, setPrompt] = useState('Add a party hat to the main subject');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (localStorage.getItem(LOCAL_STORAGE_KEY)) {
+            setHasSavedSession(true);
+        }
+    }, []);
 
     const currentImageB64 = historyIndex >= 0 ? history[historyIndex] : null;
     const canUndo = historyIndex > 0;
@@ -22,14 +31,14 @@ export const ImageEditor: React.FC = () => {
             setError(null);
             setPrompt('Add a party hat to the main subject');
             const b64 = await fileToBase64(file);
-            setOriginalImage({ b64, file });
+            setImageData({ b64, type: file.type });
             setHistory([b64]);
             setHistoryIndex(0);
         }
     };
 
     const applyEdit = async (editPrompt: string) => {
-        if (!currentImageB64 || !editPrompt || isLoading || !originalImage) return;
+        if (!currentImageB64 || !editPrompt || isLoading || !imageData) return;
 
         setIsLoading(true);
         setError(null);
@@ -37,7 +46,7 @@ export const ImageEditor: React.FC = () => {
 
         try {
             const newHistory = history.slice(0, historyIndex + 1);
-            const editedB64 = await editImage(currentImageB64, originalImage.file.type, editPrompt);
+            const editedB64 = await editImage(currentImageB64, imageData.type, editPrompt);
             
             setHistory([...newHistory, editedB64]);
             setHistoryIndex(newHistory.length);
@@ -64,6 +73,40 @@ export const ImageEditor: React.FC = () => {
             setHistoryIndex(historyIndex + 1);
         }
     };
+
+    const handleSave = () => {
+        if (!imageData || history.length === 0) return;
+
+        const sessionData = {
+            imageData: imageData,
+            history: history,
+            historyIndex: historyIndex,
+        };
+
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sessionData));
+        setHasSavedSession(true);
+        alert('Session saved!');
+    };
+
+    const handleLoad = () => {
+        const savedSession = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (savedSession) {
+            try {
+                const sessionData = JSON.parse(savedSession);
+                if (sessionData.imageData && sessionData.history && sessionData.historyIndex !== undefined) {
+                    setImageData(sessionData.imageData);
+                    setHistory(sessionData.history);
+                    setHistoryIndex(sessionData.historyIndex);
+                    setError(null);
+                } else {
+                     setError("Could not load session. The saved data is corrupted.");
+                }
+            } catch (e) {
+                setError("Could not parse saved session data.");
+            }
+        }
+    };
+
 
     const QuickEffectButton: React.FC<{ onClick: () => void, disabled: boolean, children: React.ReactNode }> = ({ onClick, disabled, children }) => (
         <button
@@ -112,13 +155,13 @@ export const ImageEditor: React.FC = () => {
                                 onChange={(e) => setPrompt(e.target.value)}
                                 placeholder="e.g., Make the sky look like a galaxy"
                                 className="w-full px-4 py-2 bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
-                                disabled={isLoading || !originalImage}
+                                disabled={isLoading || !imageData}
                             />
                         </div>
                         <button
                             type="submit"
                             className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center space-x-2 shadow-lg"
-                            disabled={isLoading || !originalImage || !prompt}
+                            disabled={isLoading || !imageData || !prompt}
                         >
                             {isLoading ? <><LoaderIcon className="h-5 w-5" /><span>Editing...</span></> : <><SparklesIcon className="h-5 w-5" /><span>Apply Edit</span></>}
                         </button>
@@ -127,15 +170,15 @@ export const ImageEditor: React.FC = () => {
                     <div className="space-y-3">
                         <label className="block text-sm font-medium text-slate-700 text-center">Or Try a Quick Effect</label>
                         <div className="grid grid-cols-2 gap-3">
-                            <QuickEffectButton onClick={() => applyEdit('Apply a vintage photo effect')} disabled={isLoading || !originalImage}>Vintage</QuickEffectButton>
-                            <QuickEffectButton onClick={() => applyEdit('Add a vibrant neon glow to the edges')} disabled={isLoading || !originalImage}>Neon Glow</QuickEffectButton>
-                            <QuickEffectButton onClick={() => applyEdit('Convert the image to a black and white pencil sketch')} disabled={isLoading || !originalImage}>Sketch</QuickEffectButton>
-                            <QuickEffectButton onClick={() => applyEdit('Apply a warm sepia tone')} disabled={isLoading || !originalImage}>Sepia Tone</QuickEffectButton>
+                            <QuickEffectButton onClick={() => applyEdit('Apply a vintage photo effect')} disabled={isLoading || !imageData}>Vintage</QuickEffectButton>
+                            <QuickEffectButton onClick={() => applyEdit('Add a vibrant neon glow to the edges')} disabled={isLoading || !imageData}>Neon Glow</QuickEffectButton>
+                            <QuickEffectButton onClick={() => applyEdit('Convert the image to a black and white pencil sketch')} disabled={isLoading || !imageData}>Sketch</QuickEffectButton>
+                            <QuickEffectButton onClick={() => applyEdit('Apply a warm sepia tone')} disabled={isLoading || !imageData}>Sepia Tone</QuickEffectButton>
                         </div>
                     </div>
                     
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2 text-center">3. History</label>
+                        <label className="block text-sm font-medium text-slate-700 mb-2 text-center">3. History & Session</label>
                         <div className="flex justify-center space-x-4">
                             <button onClick={handleUndo} disabled={!canUndo || isLoading} className="flex items-center space-x-2 bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed transition">
                                 <UndoIcon className="h-5 w-5" />
@@ -144,6 +187,16 @@ export const ImageEditor: React.FC = () => {
                             <button onClick={handleRedo} disabled={!canRedo || isLoading} className="flex items-center space-x-2 bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed transition">
                                 <RedoIcon className="h-5 w-5" />
                                 <span>Redo</span>
+                            </button>
+                        </div>
+                         <div className="flex justify-center space-x-4 mt-3">
+                            <button onClick={handleSave} disabled={!imageData || isLoading} className="flex items-center space-x-2 bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed transition">
+                                <SaveIcon className="h-5 w-5" />
+                                <span>Save</span>
+                            </button>
+                            <button onClick={handleLoad} disabled={!hasSavedSession || isLoading} className="flex items-center space-x-2 bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed transition">
+                                <FolderOpenIcon className="h-5 w-5" />
+                                <span>Load</span>
                             </button>
                         </div>
                     </div>
