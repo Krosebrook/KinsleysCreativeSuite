@@ -29,7 +29,7 @@ export const ImageEditor: React.FC = () => {
     };
 
     const applyEdit = async (editPrompt: string) => {
-        if (!currentImageB64 || !editPrompt || isLoading) return;
+        if (!currentImageB64 || !editPrompt || isLoading || !originalImage) return;
 
         setIsLoading(true);
         setError(null);
@@ -37,7 +37,7 @@ export const ImageEditor: React.FC = () => {
 
         try {
             const newHistory = history.slice(0, historyIndex + 1);
-            const editedB64 = await editImage(currentImageB64, originalImage!.file.type, editPrompt);
+            const editedB64 = await editImage(currentImageB64, originalImage.file.type, editPrompt);
             
             setHistory([...newHistory, editedB64]);
             setHistoryIndex(newHistory.length);

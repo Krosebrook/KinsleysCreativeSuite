@@ -277,7 +277,7 @@ export const generateVideo = async (
     onProgress("Video generation started. This can take a few minutes...");
     
     while (!operation.done) {
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 2000));
       operation = await videoAi.operations.getVideosOperation({operation: operation});
       
       const message = mapVeoStateToMessage(operation.metadata?.state as string);

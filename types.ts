@@ -1,5 +1,3 @@
-import type { Blob } from "@google/genai";
-
 export interface Message {
   role: 'user' | 'model';
   text: string;

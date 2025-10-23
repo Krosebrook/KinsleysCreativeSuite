@@ -103,8 +103,8 @@ export const LiveChat: React.FC = () => {
                             const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
                             const pcmBlob = createBlob(inputData);
                             
-                            // Fix: Used the session promise to prevent race conditions.
-                            sessionPromiseRef.current?.then((session) => {
+                            // Fix: Used the session promise from the outer scope to prevent race conditions and stale closures.
+                            sessionPromise.then((session) => {
                                 session.sendRealtimeInput({ media: pcmBlob });
                             });
                         };
