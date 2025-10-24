@@ -210,23 +210,35 @@ export const generateColoringPages = async (
 export const editImage = async (
   base64ImageData: string,
   mimeType: string,
-  prompt: string
+  prompt: string,
+  maskB64?: string | null
 ): Promise<string> => {
   try {
+    const parts: any[] = [
+      {
+        inlineData: {
+          data: base64ImageData,
+          mimeType: mimeType,
+        },
+      },
+      {
+        text: prompt,
+      },
+    ];
+
+    if (maskB64) {
+      parts.push({
+        inlineData: {
+          data: maskB64,
+          mimeType: 'image/png',
+        },
+      });
+    }
+
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
-        parts: [
-          {
-            inlineData: {
-              data: base64ImageData,
-              mimeType: mimeType,
-            },
-          },
-          {
-            text: prompt,
-          },
-        ],
+        parts: parts,
       },
       config: {
         responseModalities: [Modality.IMAGE],

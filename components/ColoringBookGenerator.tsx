@@ -1,7 +1,46 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { generateColoringPages } from '../services/geminiService';
 import { createPdf } from '../services/pdfService';
-import { LoaderIcon, SparklesIcon, DownloadIcon } from './icons';
+import { LoaderIcon, SparklesIcon, DownloadIcon, PencilIcon } from './icons';
+import { DrawingCanvas } from './DrawingCanvas';
+
+// In-file component for the editing modal
+const ImageEditModal: React.FC<{
+    imageB64: string;
+    onClose: () => void;
+    onSave: (newB64: string) => void;
+}> = ({ imageB64, onClose, onSave }) => {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    // Aspect ratio 4:3
+    const CANVAS_WIDTH = 800;
+    const CANVAS_HEIGHT = 600;
+
+    const handleSave = () => {
+        if (!canvasRef.current) return;
+        const dataUrl = canvasRef.current.toDataURL('image/png');
+        const base64 = dataUrl.split(',')[1];
+        onSave(base64);
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+            <div className="bg-white p-6 rounded-2xl shadow-2xl max-w-4xl w-full">
+                <h3 className="text-2xl font-bold text-slate-800 mb-4 text-center">Edit Image</h3>
+                <DrawingCanvas 
+                    ref={canvasRef}
+                    initialImageB64={imageB64}
+                    width={CANVAS_WIDTH}
+                    height={CANVAS_HEIGHT}
+                />
+                <div className="flex justify-center space-x-4 mt-4">
+                    <button onClick={onClose} className="bg-slate-500 text-white font-bold py-2 px-6 rounded-lg hover:bg-slate-600 transition">Cancel</button>
+                    <button onClick={handleSave} className="bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-indigo-700 transition">Save & Close</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 export const ColoringBookGenerator: React.FC = () => {
     const [theme, setTheme] = useState('Magical Forest Animals');
@@ -17,20 +56,21 @@ export const ColoringBookGenerator: React.FC = () => {
     const [loadingMessage, setLoadingMessage] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+    
+    const [editedContent, setEditedContent] = useState<{ cover: string; pages: string[] } | null>(null);
+    const [isEditing, setIsEditing] = useState<{ type: 'cover' | 'page'; index: number; } | null>(null);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
         setError(null);
         setPdfUrl(null);
-        setLoadingMessage('');
-
-        let generatedContent: { cover: string; pages: string[] } | null = null;
+        setEditedContent(null);
+        setIsEditing(null);
         
-        // Step 1: Generate Images
         try {
             setLoadingMessage('Gemini is drawing your cover and pages...');
-            generatedContent = await generateColoringPages(
+            const generatedContent = await generateColoringPages(
                 theme,
                 childName,
                 numPages,
@@ -40,28 +80,39 @@ export const ColoringBookGenerator: React.FC = () => {
                 customPrompt,
                 coverPrompt
             );
+            // Deep copy to allow for edits without affecting original
+            setEditedContent(JSON.parse(JSON.stringify(generatedContent)));
         } catch (err) {
             setError(err instanceof Error ? err.message : 'An unknown error occurred during image generation.');
+        } finally {
             setIsLoading(false);
             setLoadingMessage('');
-            return;
         }
+    };
 
-        // Step 2: Create PDF
-        if (generatedContent) {
-            try {
-                setLoadingMessage('Assembling your coloring book PDF...');
-                const url = await createPdf(generatedContent.cover, generatedContent.pages);
-                setPdfUrl(url);
-            } catch (err) {
-                 setError("Images generated successfully, but the PDF creation failed. Please try again.");
-            } finally {
-                setIsLoading(false);
-                setLoadingMessage('');
-            }
+    const handleCreatePdf = async () => {
+        if (!editedContent) return;
+        setIsLoading(true);
+        setError(null);
+        setLoadingMessage('Assembling your coloring book PDF...');
+        try {
+            const url = await createPdf(editedContent.cover, editedContent.pages);
+            setPdfUrl(url);
+        } catch (err) {
+            setError("PDF creation failed. Please try again.");
+        } finally {
+            setIsLoading(false);
+            setLoadingMessage('');
         }
     };
     
+    const handleReset = () => {
+        setPdfUrl(null);
+        setEditedContent(null);
+        setError(null);
+        setIsEditing(null);
+    };
+
     const InputField = ({ label, value, onChange, placeholder, disabled }: { label: string, value: string | number, onChange: (e: React.ChangeEvent<HTMLInputElement>) => void, placeholder?: string, disabled: boolean }) => (
         <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
@@ -78,12 +129,31 @@ export const ColoringBookGenerator: React.FC = () => {
 
     return (
         <>
+            {isEditing && editedContent && (
+                <ImageEditModal
+                    imageB64={isEditing.type === 'cover' ? editedContent.cover : editedContent.pages[isEditing.index]}
+                    onClose={() => setIsEditing(null)}
+                    onSave={(newB64) => {
+                        if (isEditing.type === 'cover') {
+                            setEditedContent(prev => prev ? { ...prev, cover: newB64 } : null);
+                        } else {
+                            setEditedContent(prev => {
+                                if (!prev) return null;
+                                const newPages = [...prev.pages];
+                                newPages[isEditing.index] = newB64;
+                                return { ...prev, pages: newPages };
+                            });
+                        }
+                        setIsEditing(null);
+                    }}
+                />
+            )}
             <header className="text-center mb-10 md:mb-12">
                 <h1 className="text-4xl md:text-5xl font-bold text-slate-800 tracking-tight">
                     Personalized Coloring Book Creator
                 </h1>
                 <p className="mt-3 text-lg md:text-xl text-slate-600 max-w-2xl mx-auto">
-                    Design a unique coloring book for your child in seconds.
+                    Design a unique coloring book, edit the pages, and generate a PDF.
                 </p>
             </header>
 
@@ -142,47 +212,83 @@ export const ColoringBookGenerator: React.FC = () => {
                             className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center space-x-2 shadow-lg hover:shadow-indigo-400/40"
                             disabled={isLoading}
                         >
-                            {isLoading ? (
-                                <>
-                                    <LoaderIcon className="h-5 w-5" />
-                                    <span>Creating Your Book...</span>
-                                </>
+                            {isLoading && !loadingMessage.includes('PDF') ? (
+                                <><LoaderIcon className="h-5 w-5" /><span>Generating Images...</span></>
                             ) : (
-                                <>
-                                    <SparklesIcon className="h-5 w-5" />
-                                    <span>Generate Coloring Book</span>
-                                </>
+                                <><SparklesIcon className="h-5 w-5" /><span>1. Generate Images</span></>
                             )}
                         </button>
                     </form>
                 </div>
                 
-                <div className="bg-white p-8 rounded-2xl shadow-xl flex items-center justify-center">
+                <div className="bg-white p-8 rounded-2xl shadow-xl flex flex-col min-h-[500px] lg:min-h-0">
                     {isLoading && (
-                        <div className="text-center text-slate-500">
+                        <div className="text-center text-slate-500 m-auto">
                              <LoaderIcon className="w-12 h-12 mx-auto mb-4" />
                              <p className="font-semibold">{loadingMessage}</p>
                              <p className="text-sm mt-2">This may take a moment.</p>
                         </div>
                     )}
-                    {error && <p className="text-center text-red-700 bg-red-100 p-4 rounded-lg">{error}</p>}
+                    {error && <p className="text-center text-red-700 bg-red-100 p-4 rounded-lg m-auto">{error}</p>}
                     {pdfUrl && !isLoading && (
-                        <div className="text-center">
-                            <h2 className="text-2xl font-bold text-slate-800 mb-4">Your Coloring Book is Ready!</h2>
-                            <p className="text-slate-600 mb-6">Click the button below to open and download your personalized PDF.</p>
-                            <a
-                                href={pdfUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center justify-center space-x-2 bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 transition-transform transform hover:scale-105 shadow-lg"
-                            >
-                                <DownloadIcon className="h-5 w-5" />
-                                <span>Download PDF</span>
-                            </a>
+                        <div className="text-center flex flex-col h-full">
+                            <h2 className="text-2xl font-bold text-slate-800 mb-4 flex-shrink-0">Your Coloring Book is Ready!</h2>
+                            <div className="flex-grow bg-slate-200 rounded-lg p-1 overflow-hidden shadow-inner">
+                                <iframe
+                                    src={pdfUrl}
+                                    title="Coloring Book Preview"
+                                    className="w-full h-full border-none rounded-md"
+                                />
+                            </div>
+                            <div className="flex-shrink-0 mt-4 space-y-3">
+                                <a
+                                    href={pdfUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    download={`${childName.replace(/\s+/g, '_')}_Coloring_Adventure.pdf`}
+                                    className="inline-flex items-center justify-center w-full space-x-2 bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 transition-transform transform hover:scale-105 shadow-lg"
+                                >
+                                    <DownloadIcon className="h-5 w-5" />
+                                    <span>Download PDF</span>
+                                </a>
+                                 <button
+                                    onClick={handleReset}
+                                    className="w-full bg-slate-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-slate-600 transition"
+                                >
+                                    Create a New Book
+                                </button>
+                            </div>
                         </div>
                     )}
-                    {!isLoading && !error && !pdfUrl && (
-                        <div className="text-center text-slate-400">
+                    {editedContent && !pdfUrl && !isLoading && (
+                        <div className="text-center">
+                            <h2 className="text-2xl font-bold text-slate-800 mb-4">Review & Edit Your Pages</h2>
+                            <p className="text-slate-600 mb-6">Click the edit button on any image to draw or erase before creating the PDF.</p>
+                            
+                            <div className="space-y-4 max-h-[400px] overflow-y-auto p-2 bg-slate-50 rounded-lg">
+                                {[editedContent.cover, ...editedContent.pages].map((imgB64, index) => (
+                                    <div key={index} className="flex items-center space-x-4 p-2 bg-white rounded-md shadow-sm">
+                                        <img src={`data:image/png;base64,${imgB64}`} alt={index === 0 ? 'Cover Page' : `Page ${index}`} className="w-20 h-16 object-cover rounded" />
+                                        <p className="flex-1 font-semibold text-slate-700">{index === 0 ? 'Cover Page' : `Page ${index}`}</p>
+                                        <button onClick={() => setIsEditing({ type: index === 0 ? 'cover' : 'page', index: index === 0 ? 0 : index - 1 })} className="p-2 rounded-full bg-slate-200 hover:bg-slate-300 transition">
+                                            <PencilIcon className="w-5 h-5 text-slate-600" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <button
+                                onClick={handleCreatePdf}
+                                className="w-full mt-6 bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-transform transform hover:scale-105 disabled:bg-slate-300 flex items-center justify-center space-x-2 shadow-lg"
+                                disabled={isLoading}
+                            >
+                                <DownloadIcon className="h-5 w-5" />
+                                <span>2. Create Final PDF</span>
+                            </button>
+                        </div>
+                    )}
+                    {!isLoading && !error && !pdfUrl && !editedContent && (
+                        <div className="text-center text-slate-400 m-auto">
                             <p className="text-lg">Your generated book will appear here.</p>
                         </div>
                     )}

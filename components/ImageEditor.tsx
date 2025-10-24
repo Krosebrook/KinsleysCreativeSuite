@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { editImage } from '../services/geminiService';
 import { fileToBase64 } from '../utils/helpers';
-import { LoaderIcon, SparklesIcon, UndoIcon, RedoIcon, ImageIcon, SaveIcon, FolderOpenIcon, CheckIcon, XIcon } from './icons';
+import { LoaderIcon, SparklesIcon, UndoIcon, RedoIcon, ImageIcon, SaveIcon, FolderOpenIcon, CheckIcon, XIcon, MaskIcon } from './icons';
+import { MaskingCanvas } from './MaskingCanvas';
 
 const LOCAL_STORAGE_KEY = 'imageEditorSession';
 
@@ -16,6 +17,9 @@ export const ImageEditor: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const [isMasking, setIsMasking] = useState(false);
+    const [activeMaskB64, setActiveMaskB64] = useState<string | null>(null);
+
     useEffect(() => {
         if (localStorage.getItem(LOCAL_STORAGE_KEY)) {
             setHasSavedSession(true);
@@ -28,11 +32,16 @@ export const ImageEditor: React.FC = () => {
     const canRedo = historyIndex < history.length - 1;
     const hasImage = history.length > 0;
 
+    const clearActiveEdits = () => {
+        setPreviewImageB64(null);
+        setActiveMaskB64(null);
+        setError(null);
+    };
+
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (file) {
-            setPreviewImageB64(null);
-            setError(null);
+            clearActiveEdits();
             setPrompt('Add a party hat to the main subject');
             const b64 = await fileToBase64(file);
             setMimeType(file.type);
@@ -50,7 +59,7 @@ export const ImageEditor: React.FC = () => {
         setPreviewImageB64(null);
 
         try {
-            const editedB64 = await editImage(currentImageB64, mimeType, editPrompt);
+            const editedB64 = await editImage(currentImageB64, mimeType, editPrompt, activeMaskB64);
             setPreviewImageB64(editedB64);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'An unknown error occurred.');
@@ -69,7 +78,7 @@ export const ImageEditor: React.FC = () => {
         const newHistory = history.slice(0, historyIndex + 1);
         setHistory([...newHistory, previewImageB64]);
         setHistoryIndex(newHistory.length);
-        setPreviewImageB64(null);
+        clearActiveEdits();
     };
 
     const handleDiscardPreview = () => {
@@ -77,14 +86,14 @@ export const ImageEditor: React.FC = () => {
     };
 
     const handleUndo = () => {
-        setPreviewImageB64(null);
+        clearActiveEdits();
         if (canUndo) {
             setHistoryIndex(historyIndex - 1);
         }
     };
 
     const handleRedo = () => {
-        setPreviewImageB64(null);
+        clearActiveEdits();
         if (canRedo) {
             setHistoryIndex(historyIndex + 1);
         }
@@ -111,8 +120,7 @@ export const ImageEditor: React.FC = () => {
                     setMimeType(sessionData.mimeType);
                     setHistory(sessionData.history);
                     setHistoryIndex(sessionData.historyIndex);
-                    setPreviewImageB64(null);
-                    setError(null);
+                    clearActiveEdits();
                 } else {
                      setError("Could not load session. The saved data is corrupted.");
                 }
@@ -121,6 +129,27 @@ export const ImageEditor: React.FC = () => {
             }
         }
     };
+
+    const getErrorMessageSuggestion = (errorMessage: string) => {
+        const lowerCaseMessage = errorMessage.toLowerCase();
+        let suggestion = null;
+
+        if (lowerCaseMessage.includes('safety') || lowerCaseMessage.includes('blocked')) {
+            suggestion = "Your prompt may have violated safety policies. Try rephrasing your request to be more general or less sensitive.";
+        } else if (lowerCaseMessage.includes('network') || lowerCaseMessage.includes('fetch')) {
+            suggestion = "Please check your internet connection and try again.";
+        } else if (lowerCaseMessage.includes('invalid argument')) {
+            suggestion = "The model couldn't understand the request. Try making your prompt clearer or simpler.";
+        } else if (lowerCaseMessage.includes('overloaded') || lowerCaseMessage.includes('unavailable')) {
+            suggestion = "The service is currently busy. Please wait a few moments before trying again.";
+        }
+
+        if (suggestion) {
+            return <p className="mt-2 text-sm"><b>Suggestion:</b> {suggestion}</p>;
+        }
+        return null;
+    };
+
 
     const QuickEffectButton: React.FC<{ children: React.ReactNode, effectPrompt: string }> = ({ children, effectPrompt }) => (
         <button
@@ -135,6 +164,16 @@ export const ImageEditor: React.FC = () => {
 
     return (
         <>
+            {isMasking && currentImageB64 && (
+                <MaskingCanvas
+                    baseImageB64={currentImageB64}
+                    onClose={() => setIsMasking(false)}
+                    onSave={(mask) => {
+                        setActiveMaskB64(mask);
+                        setIsMasking(false);
+                    }}
+                />
+            )}
             <header className="text-center mb-10 md:mb-12">
                 <h1 className="text-4xl md:text-5xl font-bold text-slate-800 tracking-tight">
                     AI Image Editor
@@ -174,27 +213,56 @@ export const ImageEditor: React.FC = () => {
                             </div>
                         </div>
                     ) : (
-                        <form onSubmit={handleManualPreview} className="space-y-4">
-                            <div>
-                                <label htmlFor="prompt" className="block text-sm font-medium text-slate-700 mb-1">2. Describe Your Edit</label>
-                                <input
-                                    id="prompt"
-                                    type="text"
-                                    value={prompt}
-                                    onChange={(e) => setPrompt(e.target.value)}
-                                    placeholder="e.g., Make the sky look like a galaxy"
-                                    className="w-full px-4 py-2 bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
-                                    disabled={isLoading || !hasImage}
-                                />
+                        <div className="space-y-4">
+                            <form onSubmit={handleManualPreview}>
+                                <div>
+                                    <label htmlFor="prompt" className="block text-sm font-medium text-slate-700 mb-1">2. Describe Your Edit</label>
+                                    <input
+                                        id="prompt"
+                                        type="text"
+                                        value={prompt}
+                                        onChange={(e) => setPrompt(e.target.value)}
+                                        placeholder="e.g., Make the sky look like a galaxy"
+                                        className="w-full px-4 py-2 bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                                        disabled={isLoading || !hasImage}
+                                    />
+                                </div>
+                            </form>
+                             <div className="p-4 bg-slate-50 rounded-lg space-y-3">
+                                <label className="block text-sm font-medium text-slate-700">Optional: Apply Edit to a Specific Area</label>
+                                <div className="flex space-x-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsMasking(true)}
+                                        disabled={isLoading || !hasImage}
+                                        className="flex-1 flex items-center justify-center space-x-2 bg-slate-200 text-slate-700 font-semibold py-2 px-3 rounded-lg hover:bg-slate-300 transition disabled:bg-slate-100 disabled:text-slate-400"
+                                    >
+                                        <MaskIcon className="h-5 w-5" />
+                                        <span>{activeMaskB64 ? 'Edit Mask' : 'Create Mask'}</span>
+                                    </button>
+                                    {activeMaskB64 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveMaskB64(null)}
+                                            disabled={isLoading}
+                                            className="p-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 transition"
+                                            aria-label="Clear mask"
+                                        >
+                                            <XIcon className="h-5 w-5" />
+                                        </button>
+                                    )}
+                                </div>
+                                {activeMaskB64 && <p className="text-xs text-green-700 text-center flex items-center justify-center space-x-1"><CheckIcon className="h-3 w-3" /><span>Mask applied. Edits will target the selected area.</span></p>}
                             </div>
                             <button
-                                type="submit"
+                                type="button"
+                                onClick={(e) => handleManualPreview(e as any)}
                                 className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center space-x-2 shadow-lg"
                                 disabled={isLoading || !hasImage || !prompt}
                             >
                                 {isLoading ? <><LoaderIcon className="h-5 w-5" /><span>Generating Preview...</span></> : <><SparklesIcon className="h-5 w-5" /><span>Preview Edit</span></>}
                             </button>
-                        </form>
+                        </div>
                     )}
 
                     <div className="space-y-3">
@@ -233,7 +301,7 @@ export const ImageEditor: React.FC = () => {
                                 {history.map((imgB64, index) => (
                                     <button
                                         key={index}
-                                        onClick={() => setHistoryIndex(index)}
+                                        onClick={() => { clearActiveEdits(); setHistoryIndex(index); }}
                                         disabled={!!previewImageB64}
                                         className={`flex-shrink-0 w-20 h-20 bg-white p-1 rounded-md overflow-hidden focus:outline-none transition-all duration-200 ${
                                             historyIndex === index
@@ -266,7 +334,20 @@ export const ImageEditor: React.FC = () => {
                             </div>
                         </div>
                     </div>
-                     {error && <p className="mt-2 text-center text-red-700 bg-red-100 p-3 rounded-lg">{error}</p>}
+                     {error && (
+                        <div className="mt-4 p-4 bg-red-100 border-l-4 border-red-500 text-red-800 rounded-r-lg shadow-sm animate-fade-in" role="alert">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <p className="font-bold">An Error Occurred</p>
+                                    <p className="mt-1 text-sm">{error}</p>
+                                    {getErrorMessageSuggestion(error)}
+                                </div>
+                                <button onClick={() => setError(null)} className="-mt-1 -mr-1 p-1 rounded-full text-red-700 hover:bg-red-200 transition" aria-label="Dismiss error">
+                                    <XIcon className="h-5 w-5" />
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <div className="bg-white p-8 rounded-2xl shadow-xl flex items-center justify-center">

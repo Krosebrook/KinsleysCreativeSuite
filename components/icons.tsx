@@ -167,3 +167,25 @@ export const AnalyticsIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) =>
         <path d="M3 14.3a2.4 2.4 0 0 0 2.4 2.4 2.4 2.4 0 0 0 2.4-2.4" />
     </Icon>
 );
+
+export const PencilIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <Icon {...props}>
+        <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+        <path d="m15 5 4 4" />
+    </Icon>
+);
+
+export const EraserIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <Icon {...props}>
+        <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21" />
+        <path d="M22 21H7" />
+        <path d="m5 12 5 5" />
+    </Icon>
+);
+
+export const MaskIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <Icon {...props}>
+        <path d="M18 10h-2.5a2.5 2.5 0 0 0-5 0H8a6 6 0 0 0-6 6v2h20v-2a6 6 0 0 0-6-6Z"/>
+        <path d="M12 10a2.5 2.5 0 0 1-2.5-2.5V3h5v4.5A2.5 2.5 0 0 1 12 10Z"/>
+    </Icon>
+);
