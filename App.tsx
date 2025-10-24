@@ -7,6 +7,7 @@ import { ImageEditor } from './components/ImageEditor';
 import { VideoGenerator } from './components/VideoGenerator';
 import { LiveChat } from './components/LiveChat';
 import { StoryBooster } from './components/StoryBooster';
+import { LandingPage } from './components/LandingPage';
 import { BrushIcon, ImageIcon, VideoIcon, MicIcon, BookOpenIcon } from './components/icons';
 import type { AppFeature } from './types';
 
@@ -46,9 +47,13 @@ const features = Object.keys(featureMap) as AppFeature[];
 
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeFeature, setActiveFeature] = useState<AppFeature>('coloringBook');
   
   const chatInstance = useMemo<Chat>(() => createChat(), []);
+
+  const handleSignIn = () => setIsAuthenticated(true);
+  const handleStartDemo = () => setIsAuthenticated(true);
 
   const renderActiveFeature = () => {
     switch (activeFeature) {
@@ -60,6 +65,10 @@ export default function App() {
       default: return <ColoringBookGenerator />;
     }
   };
+
+  if (!isAuthenticated) {
+    return <LandingPage onSignIn={handleSignIn} onStartDemo={handleStartDemo} />;
+  }
   
   return (
     <div className="min-h-screen font-sans text-slate-800 bg-slate-100">

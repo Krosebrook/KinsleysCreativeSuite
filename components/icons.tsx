@@ -143,3 +143,27 @@ export const CheckIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
         <path d="M20 6 9 17l-5-5" />
     </Icon>
 );
+
+export const ContentStudioIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <Icon {...props}>
+        <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+        <path d="M18.37 2.63 14 7l-1.5-1.5L16.87 1.13a1 1 0 0 1 1.5 1.5Z" />
+    </Icon>
+);
+
+export const ToolLibraryIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <Icon {...props}>
+        <path d="M2.2 12.89a10 10 0 0 0 5.4 5.4l1.6-1.6A4 4 0 0 1 10 13H8a1 1 0 0 1-1-1v-2a4 4 0 0 1 3.2-3.9l-1.6-1.6A10 10 0 0 0 2.2 12.89Z" />
+        <path d="M21.8 11.11a10 10 0 0 0-5.4-5.4l-1.6 1.6A4 4 0 0 1 14 11h2a1 1 0 0 1 1 1v2a4 4 0 0 1-3.2 3.9l1.6 1.6a10 10 0 0 0 5.4-5.4Z" />
+    </Icon>
+);
+
+export const AnalyticsIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <Icon {...props}>
+        <path d="M3 3v18h18" />
+        <path d="M18.7 8a2.4 2.4 0 0 0-2.4-2.4 2.4 2.4 0 0 0-2.4 2.4" />
+        <path d="M13.3 16a2.4 2.4 0 0 0-2.4-2.4 2.4 2.4 0 0 0-2.4 2.4" />
+        <path d="M8.5 12.8a2.4 2.4 0 0 0-2.4-2.4 2.4 2.4 0 0 0-2.4 2.4" />
+        <path d="M3 14.3a2.4 2.4 0 0 0 2.4 2.4 2.4 2.4 0 0 0 2.4-2.4" />
+    </Icon>
+);
