@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { generateColoringPages } from '../services/geminiService';
 import { createPdf } from '../services/pdfService';
@@ -11,6 +10,8 @@ export const ColoringBookGenerator: React.FC = () => {
     const [borderStyle, setBorderStyle] = useState('flowers and vines');
     const [subtitle, setSubtitle] = useState('A Journey into the Woods');
     const [artStyle, setArtStyle] = useState('simple cartoon style');
+    const [customPrompt, setCustomPrompt] = useState('');
+    const [coverPrompt, setCoverPrompt] = useState('A friendly dragon reading a book to a group of forest animals');
     
     const [isLoading, setIsLoading] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState('');
@@ -35,7 +36,9 @@ export const ColoringBookGenerator: React.FC = () => {
                 numPages,
                 borderStyle,
                 subtitle,
-                artStyle
+                artStyle,
+                customPrompt,
+                coverPrompt
             );
         } catch (err) {
             setError(err instanceof Error ? err.message : 'An unknown error occurred during image generation.');
@@ -89,8 +92,31 @@ export const ColoringBookGenerator: React.FC = () => {
                     <form onSubmit={handleSubmit} className="space-y-6">
                          <h2 className="text-2xl font-bold text-slate-800 mb-2">Book Details</h2>
                         <InputField label="Child's Name" value={childName} onChange={(e) => setChildName(e.target.value)} placeholder="e.g., Lily" disabled={isLoading} />
-                        <InputField label="Book Theme" value={theme} onChange={(e) => setTheme(e.target.value)} placeholder="e.g., Space Adventure" disabled={isLoading} />
+                        <InputField label="Book Theme (for inner pages)" value={theme} onChange={(e) => setTheme(e.target.value)} placeholder="e.g., Space Adventure" disabled={isLoading} />
                         <InputField label="Book Subtitle (Optional)" value={subtitle} onChange={(e) => setSubtitle(e.target.value)} placeholder="e.g., A Galactic Journey" disabled={isLoading} />
+                         <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Cover Art Prompt (Optional)</label>
+                            <textarea
+                                value={coverPrompt}
+                                onChange={(e) => setCoverPrompt(e.target.value)}
+                                placeholder="Describe the cover scene, e.g., A happy robot waving from its spaceship"
+                                className="w-full px-4 py-2 bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                                rows={3}
+                                disabled={isLoading}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">General AI Prompt (Optional)</label>
+                            <textarea
+                                value={customPrompt}
+                                onChange={(e) => setCustomPrompt(e.target.value)}
+                                placeholder="e.g., Make all the animals wear silly hats. Include hidden stars on every page."
+                                className="w-full px-4 py-2 bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                                rows={3}
+                                disabled={isLoading}
+                            />
+                        </div>
+                        
                         <div>
                              <label htmlFor="numPages" className="block text-sm font-medium text-slate-700 mb-1">Number of Pages</label>
                              <input id="numPages" type="number" min="1" max="10" value={numPages} onChange={(e) => setNumPages(parseInt(e.target.value, 10))} className="w-full px-4 py-2 bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition" disabled={isLoading} />

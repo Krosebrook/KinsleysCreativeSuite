@@ -10,17 +10,19 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
  * @returns A new Error object with a user-friendly message.
  */
 const handleApiError = (error: unknown, context: string): Error => {
+    // 1. Log the original error for debugging.
     console.error(`API Error in ${context}:`, error);
 
-    let errorMessage = `An unexpected error occurred during ${context}.`;
-    let messageToInspect = '';
+    // 2. Set a generic, safe default message.
+    let userFriendlyMessage = `An unexpected error occurred during ${context}. Please try again.`;
 
+    // 3. Extract a string from the unknown error type.
+    let messageToInspect = '';
     if (error instanceof Error) {
         messageToInspect = error.message;
     } else if (typeof error === 'string') {
         messageToInspect = error;
     } else {
-        // Attempt to stringify for more complex error objects
         try {
             messageToInspect = JSON.stringify(error);
         } catch {
@@ -30,35 +32,37 @@ const handleApiError = (error: unknown, context: string): Error => {
     
     const lowerCaseMessage = messageToInspect.toLowerCase();
 
+    // 4. Check for specific, common error patterns and provide actionable feedback.
     if (lowerCaseMessage.includes('failed to fetch')) {
-        errorMessage = 'A network error occurred. Please check your internet connection and try again.';
+        userFriendlyMessage = 'A network error occurred. Please check your internet connection and try again.';
     } else if (lowerCaseMessage.includes('api key not valid') || lowerCaseMessage.includes('api_key_invalid')) {
-        errorMessage = 'Your API key is invalid or missing. Please check your configuration.';
-    } else if (lowerCaseMessage.includes('quota')) {
-        errorMessage = 'You have exceeded your API quota. Please check your usage and billing details.';
+        userFriendlyMessage = 'Your API key is invalid or missing. Please ensure it is correctly configured.';
+    } else if (lowerCaseMessage.includes('quota') || lowerCaseMessage.includes('rate limit') || lowerCaseMessage.includes('429')) {
+        userFriendlyMessage = 'You have exceeded your API quota or rate limit. Please check your usage and billing details, or try again later.';
     } else if (lowerCaseMessage.includes('safety') || lowerCaseMessage.includes('blocked')) {
-        errorMessage = 'Your request was blocked due to safety settings. Please adjust your prompt and try again.';
+        userFriendlyMessage = 'Your request was blocked due to safety settings. Please adjust your prompt and try again.';
     } else if (lowerCaseMessage.includes('400 bad request') || lowerCaseMessage.includes('invalid argument')) {
-        errorMessage = 'The request was invalid. Please check your input parameters.';
-    } else if (lowerCaseMessage.includes('503') || lowerCaseMessage.includes('model is overloaded')) {
-        errorMessage = 'The AI model is currently overloaded or unavailable. Please try again in a few moments.';
+        userFriendlyMessage = `The request sent to the AI model was invalid. Please check your input and try again. Context: ${context}`;
+    } else if (lowerCaseMessage.includes('503') || lowerCaseMessage.includes('model is overloaded') || lowerCaseMessage.includes('server error')) {
+        userFriendlyMessage = 'The AI model is currently overloaded or unavailable. Please try again in a few moments.';
     } else if (lowerCaseMessage.includes("not found")) {
         // Special handling for Veo's key selection flow
         if (context === 'Video Generation') {
-             errorMessage = "API key not found or invalid. Please re-select your API key and try again.";
+             userFriendlyMessage = "API key not found or invalid. This can happen if the key was recently deleted. Please re-select your API key and try again.";
         } else {
-             errorMessage = 'The requested resource was not found.';
+             userFriendlyMessage = 'The requested AI model or resource was not found. This might be a configuration issue.';
         }
     }
 
-    return new Error(errorMessage);
+    // 5. Return a new Error object.
+    return new Error(userFriendlyMessage);
 };
 
 // --- Chat Functions ---
 
 export const createChat = (): Chat => {
   return ai.chats.create({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-flash-lite-latest',
     config: {
       systemInstruction: 'You are a friendly and helpful creative assistant for the Gemini Creative Suite.',
     },
@@ -175,13 +179,21 @@ export const generateColoringPages = async (
   numPages: number,
   borderStyle: string,
   subtitle: string,
-  artStyle: string
+  artStyle: string,
+  customPrompt: string,
+  customCoverPrompt: string
 ): Promise<{ cover: string; pages: string[] }> => {
     try {
-        const coverPrompt = `Create a fun, kid-friendly coloring book cover. The title should be '${childName}'s Coloring Adventure'. The theme is '${theme}'. The style should be ${artStyle}, black and white line art, suitable for coloring. Add a decorative border of ${borderStyle}. ${subtitle ? `Include the subtitle: '${subtitle}'.` : ''}`;
+        const customInstructions = customPrompt ? ` Additional instructions from the user: "${customPrompt}".` : '';
+
+        const coverArtDescription = customCoverPrompt 
+            ? customCoverPrompt 
+            : `The theme is '${theme}'.`;
+
+        const coverPrompt = `Create a fun, kid-friendly coloring book cover. The scene should be: "${coverArtDescription}". The title text to include is '${childName}'s Coloring Adventure'. The style should be ${artStyle}, black and white line art, suitable for coloring. Add a decorative border of ${borderStyle}. ${subtitle ? `Include the subtitle text: '${subtitle}'.` : ''}${customInstructions}`;
         
         const pagePrompts = Array.from({ length: numPages }, (_, i) => 
-            `A single, clear coloring book page for a child. The theme is '${theme}'. The style should be simple ${artStyle}, black and white line art with thick outlines. The scene should be simple and easy to color. Scene idea ${i + 1} of ${numPages}.`
+            `A single, clear coloring book page for a child. The theme is '${theme}'. The style should be simple ${artStyle}, black and white line art with thick outlines. The scene should be simple and easy to color. Scene idea ${i + 1} of ${numPages}.${customInstructions}`
         );
 
         const [cover, ...pages] = await Promise.all([

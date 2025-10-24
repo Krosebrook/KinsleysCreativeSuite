@@ -10,7 +10,6 @@ import { StoryBooster } from './components/StoryBooster';
 import { BrushIcon, ImageIcon, VideoIcon, MicIcon, BookOpenIcon } from './components/icons';
 import type { AppFeature } from './types';
 
-// Fix: Extracted props to an interface and used React.FC to correctly type the component for use with a `key` prop.
 interface NavButtonProps {
   Icon: React.ElementType;
   label: string;

@@ -17,7 +17,6 @@ export const Chatbot: React.FC<ChatbotProps> = ({ chatInstance }) => {
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [useGrounded, setUseGrounded] = useState(false);
-    const [error, setError] = useState<string | null>(null);
     
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -39,7 +38,6 @@ export const Chatbot: React.FC<ChatbotProps> = ({ chatInstance }) => {
         const currentInput = input;
         setInput('');
         setIsLoading(true);
-        setError(null);
 
         try {
             if (useGrounded) {
@@ -51,8 +49,25 @@ export const Chatbot: React.FC<ChatbotProps> = ({ chatInstance }) => {
                 setMessages(prev => [...prev, modelMessage]);
             }
         } catch (err) {
-            const errorMessageText = err instanceof Error ? err.message : 'Sorry, I encountered an error. Please try again.';
-            const errorMessage: Message = { role: 'model', text: errorMessageText };
+            let userFriendlyMessage = 'An unexpected error occurred during the chat. Please try again.';
+
+            if (err instanceof Error) {
+                const message = err.message.toLowerCase();
+                if (message.includes('api key not valid')) {
+                    userFriendlyMessage = 'The API key is invalid. Please ensure it is configured correctly.';
+                } else if (message.includes('quota') || message.includes('rate limit')) {
+                    userFriendlyMessage = 'The API quota has been exceeded. Please check your usage or try again later.';
+                } else if (message.includes('safety')) {
+                    userFriendlyMessage = 'Your prompt was blocked due to safety settings. Please try rephrasing your message.';
+                } else if (message.includes('failed to fetch')) {
+                    userFriendlyMessage = 'A network error occurred. Please check your connection and try again.';
+                } else {
+                    // Fallback to the original error message for other cases, keeping it user-facing.
+                    userFriendlyMessage = `An error occurred: ${err.message}`;
+                }
+            }
+            
+            const errorMessage: Message = { role: 'model', text: userFriendlyMessage };
             setMessages(prev => [...prev, errorMessage]);
         } finally {
             setIsLoading(false);

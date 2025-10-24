@@ -1,25 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
-// Fix: Removed `LiveSession` as it's not an exported member.
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { decode, createBlob, decodeAudioData } from '../utils/helpers';
 import { MicIcon, StopCircleIcon, LoaderIcon } from './icons';
 
-// Fix: Initialized the GoogleGenAI client.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
 // --- Audio Context Setup ---
-// Fix: Cast window to `any` to allow fallback for `webkitAudioContext` without TypeScript errors.
 const outputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
 const outputNode = outputAudioContext.createGain();
 outputNode.connect(outputAudioContext.destination);
 
-// Fix: Implemented the full LiveChat component.
 export const LiveChat: React.FC = () => {
     const [isConnecting, setIsConnecting] = useState(false);
     const [isRecording, setIsRecording] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Fix: Used ReturnType to get the type of the session promise without importing LiveSession.
     const sessionPromiseRef = useRef<ReturnType<typeof ai.live.connect> | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
     const inputAudioContextRef = useRef<AudioContext | null>(null);
@@ -30,9 +25,20 @@ export const LiveChat: React.FC = () => {
     const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
     const nextStartTimeRef = useRef<number>(0);
 
+    // Visualizer state
+    const analyserRef = useRef<AnalyserNode | null>(null);
+    const dataArrayRef = useRef<Uint8Array | null>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const animationFrameRef = useRef<number | null>(null);
+
+
     const stopAudioPlayback = () => {
         sourcesRef.current.forEach(source => {
-            source.stop();
+            try {
+                source.stop();
+            } catch (e) {
+                // Ignore errors if the source is already stopped
+            }
         });
         sourcesRef.current.clear();
         nextStartTimeRef.current = 0;
@@ -40,7 +46,7 @@ export const LiveChat: React.FC = () => {
 
     const stopRecording = () => {
         if (sessionPromiseRef.current) {
-            sessionPromiseRef.current.then(session => session.close());
+            sessionPromiseRef.current.then(session => session.close()).catch(console.error);
             sessionPromiseRef.current = null;
         }
 
@@ -48,10 +54,20 @@ export const LiveChat: React.FC = () => {
             mediaStreamRef.current.getTracks().forEach(track => track.stop());
             mediaStreamRef.current = null;
         }
+        
+        if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+            animationFrameRef.current = null;
+        }
 
         if (scriptProcessorRef.current) {
             scriptProcessorRef.current.disconnect();
             scriptProcessorRef.current = null;
+        }
+        
+        if (analyserRef.current) {
+            analyserRef.current.disconnect();
+            analyserRef.current = null;
         }
         
         if (mediaStreamSourceRef.current) {
@@ -60,7 +76,7 @@ export const LiveChat: React.FC = () => {
         }
         
         if (inputAudioContextRef.current && inputAudioContextRef.current.state !== 'closed') {
-            inputAudioContextRef.current.close();
+            inputAudioContextRef.current.close().catch(console.error);
             inputAudioContextRef.current = null;
         }
 
@@ -68,6 +84,46 @@ export const LiveChat: React.FC = () => {
         setIsRecording(false);
         setIsConnecting(false);
     };
+
+    const drawVisualizer = () => {
+        if (!analyserRef.current || !dataArrayRef.current || !canvasRef.current) return;
+        
+        const canvas = canvasRef.current;
+        const canvasCtx = canvas.getContext('2d');
+        if (!canvasCtx) return;
+
+        analyserRef.current.getByteTimeDomainData(dataArrayRef.current);
+        
+        canvasCtx.fillStyle = 'rgb(241 245 249)'; // slate-100
+        canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        canvasCtx.lineWidth = 2;
+        canvasCtx.strokeStyle = 'rgb(79 70 229)'; // indigo-600
+        
+        canvasCtx.beginPath();
+        
+        const sliceWidth = canvas.width * 1.0 / analyserRef.current.frequencyBinCount;
+        let x = 0;
+
+        for (let i = 0; i < analyserRef.current.frequencyBinCount; i++) {
+            const v = dataArrayRef.current[i] / 128.0;
+            const y = v * canvas.height / 2;
+    
+            if (i === 0) {
+                canvasCtx.moveTo(x, y);
+            } else {
+                canvasCtx.lineTo(x, y);
+            }
+    
+            x += sliceWidth;
+        }
+        
+        canvasCtx.lineTo(canvas.width, canvas.height / 2);
+        canvasCtx.stroke();
+        
+        animationFrameRef.current = requestAnimationFrame(drawVisualizer);
+    };
+
 
     const startRecording = async () => {
         setIsConnecting(true);
@@ -82,7 +138,6 @@ export const LiveChat: React.FC = () => {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             mediaStreamRef.current = stream;
 
-            // Fix: Cast window to `any` to allow fallback for `webkitAudioContext` without TypeScript errors.
             const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
             inputAudioContextRef.current = inputAudioContext;
             
@@ -102,19 +157,26 @@ export const LiveChat: React.FC = () => {
                         scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
                             const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
                             const pcmBlob = createBlob(inputData);
-                            
-                            // Fix: Used the session promise from the outer scope to prevent race conditions and stale closures.
                             sessionPromise.then((session) => {
                                 session.sendRealtimeInput({ media: pcmBlob });
                             });
                         };
-                        source.connect(scriptProcessor);
+                        
+                        // Setup visualizer
+                        const analyser = inputAudioContext.createAnalyser();
+                        analyser.fftSize = 2048;
+                        analyserRef.current = analyser;
+                        dataArrayRef.current = new Uint8Array(analyser.frequencyBinCount);
+
+                        source.connect(analyser);
+                        analyser.connect(scriptProcessor);
                         scriptProcessor.connect(inputAudioContext.destination);
+
+                        drawVisualizer();
                     },
                     onmessage: async (message: LiveServerMessage) => {
-                        const base64EncodedAudioString = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
+                        const base64EncodedAudioString = message.serverContent?.modelTurn?.parts[0]?.inlineData.data;
                         if (base64EncodedAudioString) {
-                            // Fix: Implemented gapless audio playback logic.
                             nextStartTimeRef.current = Math.max(
                                 nextStartTimeRef.current,
                                 outputAudioContext.currentTime,
@@ -142,11 +204,7 @@ export const LiveChat: React.FC = () => {
                         }
                     },
                     onerror: (e: ErrorEvent) => {
-                        console.error('Live API error:', e);
-                        const errorMessage = e.message 
-                            ? `A connection error occurred: ${e.message}` 
-                            : 'A connection error occurred. Please check your network and try again.';
-                        setError(errorMessage);
+                        setError(`An error occurred: ${e.message}. Please try again.`);
                         stopRecording();
                     },
                     onclose: (e: CloseEvent) => {
@@ -158,20 +216,20 @@ export const LiveChat: React.FC = () => {
                     speechConfig: {
                         voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } },
                     },
-                    systemInstruction: 'You are a friendly and helpful conversational AI.',
+                    systemInstruction: 'You are a friendly and helpful creative assistant. Keep your responses concise.',
                 },
             });
 
             sessionPromiseRef.current = sessionPromise;
 
         } catch (err) {
-            console.error('Failed to start recording:', err);
-            setError('Could not access microphone. Please check permissions and try again.');
+            setError(err instanceof Error ? err.message : 'Failed to start recording.');
             setIsConnecting(false);
+            stopRecording();
         }
     };
-    
-    // Cleanup on component unmount
+
+    // Cleanup on unmount
     useEffect(() => {
         return () => {
             stopRecording();
@@ -182,37 +240,50 @@ export const LiveChat: React.FC = () => {
         <>
             <header className="text-center mb-10 md:mb-12">
                 <h1 className="text-4xl md:text-5xl font-bold text-slate-800 tracking-tight">
-                    Live Conversation with Gemini
+                    Live Conversation
                 </h1>
                 <p className="mt-3 text-lg md:text-xl text-slate-600 max-w-2xl mx-auto">
-                    Have a real-time, voice-to-voice chat with the AI.
+                    Speak directly with a Gemini-powered AI assistant in real-time.
                 </p>
             </header>
-            
+
             <div className="max-w-md mx-auto bg-white p-8 rounded-2xl shadow-xl text-center">
-                <div className="flex flex-col items-center justify-center space-y-6">
-                    <p className="text-slate-600">
-                        {isRecording ? "I'm listening... Talk to me!" : isConnecting ? "Connecting to Gemini..." : "Press the button and start speaking."}
-                    </p>
-                    
-                    <button
-                        onClick={isRecording ? stopRecording : startRecording}
-                        disabled={isConnecting}
-                        className={`relative w-24 h-24 rounded-full flex items-center justify-center transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                            isRecording ? 'bg-red-500 hover:bg-red-600 focus:ring-red-500' : 'bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500'
-                        } ${isConnecting ? 'bg-slate-300 cursor-not-allowed' : ''}`}
-                    >
-                        {isConnecting ? (
-                            <LoaderIcon className="h-10 w-10 text-white" />
-                        ) : isRecording ? (
-                            <StopCircleIcon className="h-12 w-12 text-white" />
-                        ) : (
-                            <MicIcon className="h-10 w-10 text-white" />
-                        )}
-                    </button>
-                    
-                    {error && <p className="text-red-600 bg-red-100 p-3 rounded-md">{error}</p>}
+                <div className="mb-6 h-24 bg-slate-100 rounded-lg">
+                    {isRecording && <canvas ref={canvasRef} className="w-full h-full" />}
                 </div>
+
+                {!isRecording && !isConnecting && (
+                    <button
+                        onClick={startRecording}
+                        className="bg-indigo-600 text-white font-bold py-4 px-8 rounded-full hover:bg-indigo-700 transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 flex items-center justify-center mx-auto space-x-3 shadow-lg"
+                    >
+                        <MicIcon className="h-6 w-6" />
+                        <span>Start Conversation</span>
+                    </button>
+                )}
+
+                {isConnecting && (
+                    <div className="flex flex-col items-center justify-center text-slate-500">
+                        <LoaderIcon className="w-12 h-12" />
+                        <p className="mt-2 font-semibold">Connecting...</p>
+                    </div>
+                )}
+
+                {isRecording && (
+                    <button
+                        onClick={stopRecording}
+                        className="bg-red-600 text-white font-bold py-4 px-8 rounded-full hover:bg-red-700 transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 flex items-center justify-center mx-auto space-x-3 shadow-lg"
+                    >
+                        <StopCircleIcon className="h-6 w-6" />
+                        <span>Stop Conversation</span>
+                    </button>
+                )}
+
+                {error && <p className="mt-4 text-center text-red-700 bg-red-100 p-3 rounded-lg">{error}</p>}
+                
+                <p className="mt-6 text-sm text-slate-500">
+                    {isRecording ? "Your microphone is active. Start speaking to the assistant." : "Click 'Start' to begin your conversation. Make sure to allow microphone access."}
+                </p>
             </div>
         </>
     );
