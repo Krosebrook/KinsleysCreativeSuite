@@ -211,3 +211,27 @@ export const ArrowDownIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) =>
         <path d="M12 5v14" />
     </Icon>
 );
+
+export const AlignLeftIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <Icon {...props}>
+    <line x1="3" x2="21" y1="6" y2="6" />
+    <line x1="3" x2="15" y1="12" y2="12" />
+    <line x1="3" x2="21" y1="18" y2="18" />
+  </Icon>
+);
+
+export const AlignCenterIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <Icon {...props}>
+    <line x1="6" x2="18" y1="6" y2="6" />
+    <line x1="3" x2="21" y1="12" y2="12" />
+    <line x1="6" x2="18" y1="18" y2="18" />
+  </Icon>
+);
+
+export const AlignRightIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <Icon {...props}>
+    <line x1="21" x2="3" y1="6" y2="6" />
+    <line x1="21" x2="9" y1="12" y2="12" />
+    <line x1="21" x2="3" y1="18" y2="18" />
+  </Icon>
+);
