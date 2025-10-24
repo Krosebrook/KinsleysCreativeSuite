@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { editImage } from '../services/geminiService';
 import { fileToBase64 } from '../utils/helpers';
-import { LoaderIcon, SparklesIcon, UndoIcon, RedoIcon, ImageIcon, SaveIcon, FolderOpenIcon, CheckIcon, XIcon, MaskIcon } from './icons';
+import { LoaderIcon, SparklesIcon, UndoIcon, RedoIcon, ImageIcon, SaveIcon, FolderOpenIcon, CheckIcon, XIcon, MaskIcon, VideoIcon } from './icons';
 import { MaskingCanvas } from './MaskingCanvas';
 
 const LOCAL_STORAGE_KEY = 'imageEditorSession';
 
-export const ImageEditor: React.FC = () => {
+interface ImageEditorProps {
+    onSendToVideoGenerator: (imageData: { b64: string; mimeType: string; }) => void;
+}
+
+export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator }) => {
     const [mimeType, setMimeType] = useState<string | null>(null);
     const [history, setHistory] = useState<string[]>([]);
     const [historyIndex, setHistoryIndex] = useState(-1);
@@ -130,26 +134,67 @@ export const ImageEditor: React.FC = () => {
         }
     };
 
-    const getErrorMessageSuggestion = (errorMessage: string) => {
-        const lowerCaseMessage = errorMessage.toLowerCase();
-        let suggestion = null;
+    const renderError = () => {
+        if (!error) return null;
 
-        if (lowerCaseMessage.includes('safety') || lowerCaseMessage.includes('blocked')) {
-            suggestion = "Your prompt may have violated safety policies. Try rephrasing your request to be more general or less sensitive.";
-        } else if (lowerCaseMessage.includes('network') || lowerCaseMessage.includes('fetch')) {
-            suggestion = "Please check your internet connection and try again.";
-        } else if (lowerCaseMessage.includes('invalid argument')) {
-            suggestion = "The model couldn't understand the request. Try making your prompt clearer or simpler.";
-        } else if (lowerCaseMessage.includes('overloaded') || lowerCaseMessage.includes('unavailable')) {
-            suggestion = "The service is currently busy. Please wait a few moments before trying again.";
-        }
+        let title = "An Unexpected Error Occurred";
+        let suggestions: string[] = ["Please try again in a few moments.", "If the problem persists, try loading a saved session or starting with a new image."];
+        const lowerCaseError = error.toLowerCase();
 
-        if (suggestion) {
-            return <p className="mt-2 text-sm"><b>Suggestion:</b> {suggestion}</p>;
+        if (lowerCaseError.includes('safety') || lowerCaseError.includes('blocked')) {
+            title = "Prompt Blocked for Safety";
+            suggestions = [
+                "Try rephrasing your prompt to be more general.",
+                "Avoid using words that could be considered sensitive or harmful.",
+                "Ensure your mask selection is appropriate if you are using one."
+            ];
+        } else if (lowerCaseError.includes('network') || lowerCaseError.includes('fetch')) {
+            title = "Network Connection Error";
+            suggestions = [
+                "Please check your internet connection.",
+                "Try refreshing the page and uploading the image again."
+            ];
+        } else if (lowerCaseError.includes('quota') || lowerCaseError.includes('rate limit')) {
+            title = "API Limit Reached";
+            suggestions = [
+                "You have exceeded your usage limit for the API.",
+                "Please check your billing details on your Google AI Studio account.",
+                "Wait for some time before trying again."
+            ];
+        } else if (lowerCaseError.includes('invalid argument')) {
+            title = "Invalid Request";
+            suggestions = [
+                "The model could not understand the request.",
+                "Try making your prompt clearer, simpler, or more descriptive."
+            ];
+        } else if (lowerCaseError.includes('overloaded') || lowerCaseError.includes('unavailable')) {
+            title = "Model Unavailable";
+            suggestions = [
+                "The AI model is currently busy or under maintenance.",
+                "Please wait a few moments before trying again."
+            ];
         }
-        return null;
+        
+        return (
+            <div className="mt-4 p-4 bg-red-100 border-l-4 border-red-500 text-red-800 rounded-r-lg shadow-sm animate-fade-in" role="alert">
+                <div className="flex justify-between items-start">
+                    <div>
+                        <p className="font-bold text-lg">{title}</p>
+                        <p className="mt-1 text-sm">{error}</p>
+                        <div className="mt-3 pt-2 border-t border-red-200">
+                           <p className="font-semibold text-sm">What you can do:</p>
+                           <ul className="list-disc list-inside mt-1 text-sm space-y-1">
+                               {suggestions.map((s, i) => <li key={i}>{s}</li>)}
+                           </ul>
+                        </div>
+                    </div>
+                    <button onClick={() => setError(null)} className="-mt-1 -mr-1 p-1 rounded-full text-red-700 hover:bg-red-200 transition" aria-label="Dismiss error">
+                        <XIcon className="h-5 w-5" />
+                    </button>
+                </div>
+            </div>
+        );
     };
-
 
     const QuickEffectButton: React.FC<{ children: React.ReactNode, effectPrompt: string }> = ({ children, effectPrompt }) => (
         <button
@@ -321,8 +366,8 @@ export const ImageEditor: React.FC = () => {
                         )}
                         
                         <div className="border-t pt-4">
-                            <label className="block text-sm font-medium text-slate-700 mb-2 text-center">Session Management</label>
-                             <div className="flex justify-center space-x-4">
+                            <label className="block text-sm font-medium text-slate-700 mb-2 text-center">Session & Actions</label>
+                             <div className="flex justify-center space-x-4 mb-4">
                                 <button onClick={handleSave} disabled={!hasImage || isLoading || !!previewImageB64} className="flex items-center space-x-2 bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed transition">
                                     <SaveIcon className="h-5 w-5" />
                                     <span>Save</span>
@@ -332,22 +377,22 @@ export const ImageEditor: React.FC = () => {
                                     <span>Load</span>
                                 </button>
                             </div>
+                             <button
+                                onClick={() => {
+                                    if(currentImageB64 && mimeType) {
+                                        onSendToVideoGenerator({ b64: currentImageB64, mimeType })
+                                    }
+                                }}
+// Fix: Corrected typo from previewImageB6á4 to previewImageB64
+                                disabled={!hasImage || isLoading || !!previewImageB64}
+                                className="w-full flex items-center justify-center space-x-2 bg-purple-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-purple-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition shadow-md"
+                            >
+                                <VideoIcon className="h-5 w-5" />
+                                <span>Animate this Image</span>
+                            </button>
                         </div>
                     </div>
-                     {error && (
-                        <div className="mt-4 p-4 bg-red-100 border-l-4 border-red-500 text-red-800 rounded-r-lg shadow-sm animate-fade-in" role="alert">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <p className="font-bold">An Error Occurred</p>
-                                    <p className="mt-1 text-sm">{error}</p>
-                                    {getErrorMessageSuggestion(error)}
-                                </div>
-                                <button onClick={() => setError(null)} className="-mt-1 -mr-1 p-1 rounded-full text-red-700 hover:bg-red-200 transition" aria-label="Dismiss error">
-                                    <XIcon className="h-5 w-5" />
-                                </button>
-                            </div>
-                        </div>
-                    )}
+                     {renderError()}
                 </div>
 
                 <div className="bg-white p-8 rounded-2xl shadow-xl flex items-center justify-center">

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { createChat } from './services/geminiService';
 import { Chatbot } from './components/Chatbot';
 import type { Chat } from '@google/genai';
@@ -10,6 +10,7 @@ import { StoryBooster } from './components/StoryBooster';
 import { LandingPage } from './components/LandingPage';
 import { BrushIcon, ImageIcon, VideoIcon, MicIcon, BookOpenIcon } from './components/icons';
 import type { AppFeature } from './types';
+import { dataURLtoFile } from './utils/helpers';
 
 interface NavButtonProps {
   Icon: React.ElementType;
@@ -50,18 +51,44 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeFeature, setActiveFeature] = useState<AppFeature>('coloringBook');
   
+  // State for cross-feature integration
+  const [initialColoringBookPrompt, setInitialColoringBookPrompt] = useState<string | null>(null);
+  const [initialVideoGeneratorImage, setInitialVideoGeneratorImage] = useState<{b64: string, file: File} | null>(null);
+
   const chatInstance = useMemo<Chat>(() => createChat(), []);
 
   const handleSignIn = () => setIsAuthenticated(true);
   const handleStartDemo = () => setIsAuthenticated(true);
 
+  // Handlers for cross-feature actions
+  const handleGenerateColoringPagesFromStory = (storyText: string) => {
+    setInitialColoringBookPrompt(`Based on the following story, create a fun scene for a coloring page: "${storyText}"`);
+    setActiveFeature('coloringBook');
+  };
+
+  const handleSendToVideoGenerator = (imageData: { b64: string; mimeType: string }) => {
+    const file = dataURLtoFile(`data:${imageData.mimeType};base64,${imageData.b64}`, 'edited-image.png');
+    setInitialVideoGeneratorImage({ b64: imageData.b64, file });
+    setActiveFeature('videoGenerator');
+  };
+
+  // Effect to clear transient state when user navigates away
+  useEffect(() => {
+    if (activeFeature !== 'coloringBook' && initialColoringBookPrompt) {
+      setInitialColoringBookPrompt(null);
+    }
+    if (activeFeature !== 'videoGenerator' && initialVideoGeneratorImage) {
+      setInitialVideoGeneratorImage(null);
+    }
+  }, [activeFeature]);
+
   const renderActiveFeature = () => {
     switch (activeFeature) {
-      case 'coloringBook': return <ColoringBookGenerator />;
-      case 'imageEditor': return <ImageEditor />;
-      case 'videoGenerator': return <VideoGenerator />;
+      case 'coloringBook': return <ColoringBookGenerator initialPrompt={initialColoringBookPrompt} />;
+      case 'imageEditor': return <ImageEditor onSendToVideoGenerator={handleSendToVideoGenerator} />;
+      case 'videoGenerator': return <VideoGenerator initialImage={initialVideoGeneratorImage} />;
       case 'liveChat': return <LiveChat />;
-      case 'storyBooster': return <StoryBooster />;
+      case 'storyBooster': return <StoryBooster onGenerateColoringPages={handleGenerateColoringPagesFromStory} />;
       default: return <ColoringBookGenerator />;
     }
   };

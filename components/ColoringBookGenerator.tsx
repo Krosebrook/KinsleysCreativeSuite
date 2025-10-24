@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { generateColoringPages } from '../services/geminiService';
 import { createPdf } from '../services/pdfService';
 import { LoaderIcon, SparklesIcon, DownloadIcon, PencilIcon } from './icons';
@@ -42,7 +42,7 @@ const ImageEditModal: React.FC<{
 };
 
 
-export const ColoringBookGenerator: React.FC = () => {
+export const ColoringBookGenerator: React.FC<{ initialPrompt?: string | null }> = ({ initialPrompt }) => {
     const [theme, setTheme] = useState('Magical Forest Animals');
     const [childName, setChildName] = useState('Alex');
     const [numPages, setNumPages] = useState(5);
@@ -59,6 +59,12 @@ export const ColoringBookGenerator: React.FC = () => {
     
     const [editedContent, setEditedContent] = useState<{ cover: string; pages: string[] } | null>(null);
     const [isEditing, setIsEditing] = useState<{ type: 'cover' | 'page'; index: number; } | null>(null);
+
+    useEffect(() => {
+        if (initialPrompt) {
+            setCustomPrompt(initialPrompt);
+        }
+    }, [initialPrompt]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

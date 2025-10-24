@@ -189,3 +189,25 @@ export const MaskIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
         <path d="M12 10a2.5 2.5 0 0 1-2.5-2.5V3h5v4.5A2.5 2.5 0 0 1 12 10Z"/>
     </Icon>
 );
+
+export const TrashIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <Icon {...props}>
+        <path d="M3 6h18" />
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </Icon>
+);
+
+export const ArrowUpIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <Icon {...props}>
+        <path d="m5 12 7-7 7 7" />
+        <path d="M12 19V5" />
+    </Icon>
+);
+
+export const ArrowDownIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <Icon {...props}>
+        <path d="m5 12 7 7 7 7" />
+        <path d="M12 5v14" />
+    </Icon>
+);

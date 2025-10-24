@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { analyzeText, improveText, suggestTitles, generateStoryIdea } from '../services/geminiService';
-import { LoaderIcon, SparklesIcon, BookOpenIcon } from './icons';
+import { LoaderIcon, SparklesIcon, BookOpenIcon, BrushIcon } from './icons';
 
 const AUTOSAVE_KEY = 'storyBooster_autosavedText';
 
-export const StoryBooster: React.FC = () => {
+interface StoryBoosterProps {
+    onGenerateColoringPages: (storyText: string) => void;
+}
+
+export const StoryBooster: React.FC<StoryBoosterProps> = ({ onGenerateColoringPages }) => {
     const [text, setText] = useState(
 `The old lighthouse stood on the cliff's edge, a lonely sentinel against the raging sea. Every night, its beam cut through the darkness, a beacon of hope for sailors. But tonight, the light was gone. A young girl named Elara, who lived in the nearby village, noticed its absence. She knew the lighthouse keeper, old Finn, would never let the light go out. Something was wrong.`
     );
@@ -181,6 +185,17 @@ export const StoryBooster: React.FC = () => {
                         {result && !isLoading && (
                             <div className="animate-fade-in">
                                 {renderResult()}
+                                {typeof result === 'string' && (
+                                    <div className="mt-6 pt-4 border-t">
+                                        <button
+                                            onClick={() => onGenerateColoringPages(result as string)}
+                                            className="w-full flex items-center justify-center space-x-2 bg-teal-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-teal-600 transition shadow-md"
+                                        >
+                                            <BrushIcon className="h-5 w-5" />
+                                            <span>Create Coloring Pages from this Story</span>
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         )}
                         {!isLoading && !error && !result && (
