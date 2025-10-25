@@ -8,9 +8,10 @@ import { VideoGenerator } from './components/VideoGenerator';
 import { LiveChat } from './components/LiveChat';
 import { StoryBooster } from './components/StoryBooster';
 import { LandingPage } from './components/LandingPage';
-import { BrushIcon, ImageIcon, VideoIcon, MicIcon, BookOpenIcon, SunIcon, MoonIcon } from './components/icons';
+import { BrushIcon, ImageIcon, VideoIcon, MicIcon, BookOpenIcon, SunIcon, MoonIcon, StickerIcon } from './components/icons';
 import type { AppFeature } from './types';
 import { dataURLtoFile } from './utils/helpers';
+import { StickerMaker } from './components/StickerMaker';
 
 interface NavButtonProps {
   Icon: React.ElementType;
@@ -40,6 +41,7 @@ const NavButton: React.FC<NavButtonProps> = ({
 const featureMap: Record<AppFeature, { icon: React.ElementType, label: string }> = {
     coloringBook: { icon: BrushIcon, label: "Coloring Book" },
     imageEditor: { icon: ImageIcon, label: "Image Editor" },
+    stickerMaker: { icon: StickerIcon, label: "Sticker Maker" },
     storyBooster: { icon: BookOpenIcon, label: "Story Booster" },
     videoGenerator: { icon: VideoIcon, label: "Video Generator" },
     liveChat: { icon: MicIcon, label: "Live Chat" },
@@ -82,6 +84,8 @@ export default function App() {
   const [initialColoringBookPrompt, setInitialColoringBookPrompt] = useState<string | null>(null);
   const [initialVideoGeneratorImage, setInitialVideoGeneratorImage] = useState<{b64: string, file: File} | null>(null);
   const [initialColoringPageImage, setInitialColoringPageImage] = useState<string | null>(null);
+  const [stickerToSendToEditor, setStickerToSendToEditor] = useState<string | null>(null);
+
 
   const chatInstance = useMemo<Chat>(() => createChat(), []);
 
@@ -105,6 +109,11 @@ export default function App() {
     setActiveFeature('coloringBook');
   };
 
+  const handleSendStickerToEditor = (stickerB64: string) => {
+    setStickerToSendToEditor(stickerB64);
+    setActiveFeature('imageEditor');
+  };
+
 
   // Effect to clear transient state when user navigates away
   useEffect(() => {
@@ -117,12 +126,16 @@ export default function App() {
      if (activeFeature !== 'coloringBook' && initialColoringPageImage) {
       setInitialColoringPageImage(null);
     }
+    if (activeFeature !== 'imageEditor' && stickerToSendToEditor) {
+      setStickerToSendToEditor(null);
+    }
   }, [activeFeature]);
 
   const renderActiveFeature = () => {
     switch (activeFeature) {
       case 'coloringBook': return <ColoringBookGenerator initialPrompt={initialColoringBookPrompt} initialImage={initialColoringPageImage} />;
-      case 'imageEditor': return <ImageEditor onSendToVideoGenerator={handleSendToVideoGenerator} onConvertToColoringPage={handleConvertToColoringPage} />;
+      case 'imageEditor': return <ImageEditor onSendToVideoGenerator={handleSendToVideoGenerator} onConvertToColoringPage={handleConvertToColoringPage} incomingStickerB64={stickerToSendToEditor} />;
+      case 'stickerMaker': return <StickerMaker onSendToEditor={handleSendStickerToEditor} />;
       case 'videoGenerator': return <VideoGenerator initialImage={initialVideoGeneratorImage} />;
       case 'liveChat': return <LiveChat />;
       case 'storyBooster': return <StoryBooster onGenerateColoringPages={handleGenerateColoringPagesFromStory} />;
@@ -138,10 +151,10 @@ export default function App() {
     <div className="min-h-screen font-sans">
       <main className="container mx-auto px-4 py-8 md:py-12">
 
-        <div className="max-w-4xl mx-auto mb-8 md:mb-12">
+        <div className="max-w-5xl mx-auto mb-8 md:mb-12">
             <h1 className="text-4xl md:text-5xl font-bold text-center text-slate-800 dark:text-slate-100 mb-2">Gemini Creative Suite</h1>
             <p className="text-lg text-slate-500 dark:text-slate-400 text-center mb-8">Your all-in-one AI-powered creative toolkit.</p>
-          <div className="grid grid-cols-3 md:grid-cols-5 gap-2 md:gap-3">
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-2 md:gap-3">
             {features.map((feature) => (
                 <NavButton 
                     key={feature}

@@ -9,9 +9,10 @@ const LOCAL_STORAGE_KEY = 'imageEditorSession';
 interface ImageEditorProps {
     onSendToVideoGenerator: (imageData: { b64: string; mimeType: string; }) => void;
     onConvertToColoringPage: (newImageB64: string) => void;
+    incomingStickerB64?: string | null;
 }
 
-export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator, onConvertToColoringPage }) => {
+export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator, onConvertToColoringPage, incomingStickerB64 }) => {
     const [mimeType, setMimeType] = useState<string | null>(null);
     const [history, setHistory] = useState<string[]>([]);
     const [historyIndex, setHistoryIndex] = useState(-1);
@@ -25,18 +26,32 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator
 
     const [isMasking, setIsMasking] = useState(false);
     const [activeMaskB64, setActiveMaskB64] = useState<string | null>(null);
+    const [stickerToApply, setStickerToApply] = useState<string | null>(null);
+
+    // FIX: Moved derived state variables before useEffect hooks that use them
+    // to resolve "used before its declaration" error.
+    const currentImageB64 = historyIndex >= 0 ? history[historyIndex] : null;
+    const imageToDisplay = previewImageB64 || currentImageB64;
+    const canUndo = historyIndex > 0;
+    const canRedo = historyIndex < history.length - 1;
+    const hasImage = history.length > 0;
 
     useEffect(() => {
         if (localStorage.getItem(LOCAL_STORAGE_KEY)) {
             setHasSavedSession(true);
         }
     }, []);
-
-    const currentImageB64 = historyIndex >= 0 ? history[historyIndex] : null;
-    const imageToDisplay = previewImageB64 || currentImageB64;
-    const canUndo = historyIndex > 0;
-    const canRedo = historyIndex < history.length - 1;
-    const hasImage = history.length > 0;
+    
+    useEffect(() => {
+        if (incomingStickerB64) {
+            if (!hasImage) {
+                setError("Please upload a base image before adding a sticker.");
+                return;
+            }
+            setStickerToApply(incomingStickerB64);
+            setPrompt('Place the sticker on the main subject of the primary image.');
+        }
+    }, [incomingStickerB64, hasImage]);
 
     const clearActiveEdits = () => {
         setPreviewImageB64(null);
@@ -48,6 +63,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator
         const file = event.target.files?.[0];
         if (file) {
             clearActiveEdits();
+            setStickerToApply(null); // Clear any active sticker when new image is loaded
             setPrompt('Add a party hat to the main subject');
             const b64 = await fileToBase64(file);
             setMimeType(file.type);
@@ -65,7 +81,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator
         setPreviewImageB64(null);
 
         try {
-            const editedB64 = await editImage(currentImageB64, mimeType, editPrompt, activeMaskB64);
+            const editedB64 = await editImage(currentImageB64, mimeType, editPrompt, activeMaskB64, stickerToApply);
             setPreviewImageB64(editedB64);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'An unknown error occurred.');
@@ -85,6 +101,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator
         setHistory([...newHistory, previewImageB64]);
         setHistoryIndex(newHistory.length);
         clearActiveEdits();
+        setStickerToApply(null); // Sticker is now part of the history, clear it
     };
 
     const handleDiscardPreview = () => {
@@ -93,6 +110,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator
 
     const handleUndo = () => {
         clearActiveEdits();
+        setStickerToApply(null);
         if (canUndo) {
             setHistoryIndex(historyIndex - 1);
         }
@@ -100,6 +118,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator
 
     const handleRedo = () => {
         clearActiveEdits();
+        setStickerToApply(null);
         if (canRedo) {
             setHistoryIndex(historyIndex - 1);
         }
@@ -127,6 +146,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator
                     setHistory(sessionData.history);
                     setHistoryIndex(sessionData.historyIndex);
                     clearActiveEdits();
+                    setStickerToApply(null);
                 } else {
                      setError("Could not load session. The saved data is corrupted.");
                 }
@@ -216,7 +236,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator
         <button
             type="button"
             onClick={() => generatePreview(effectPrompt)}
-            disabled={isLoading || !hasImage || !!previewImageB64}
+            disabled={isLoading || !hasImage || !!previewImageB64 || !!stickerToApply}
             className="w-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold py-2 px-3 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition text-sm disabled:bg-slate-50 dark:disabled:bg-slate-700/50 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed"
         >
             {children}
@@ -276,6 +296,18 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator
                     ) : (
                         <div className="space-y-4">
                             <form onSubmit={handleManualPreview}>
+                                {stickerToApply && (
+                                    <div className="p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg space-y-2">
+                                        <div className="flex justify-between items-center">
+                                            <p className="text-sm font-semibold text-indigo-800 dark:text-indigo-200">Applying Sticker</p>
+                                            <button onClick={() => setStickerToApply(null)} className="text-xs text-slate-500 dark:text-slate-400 hover:underline">Clear</button>
+                                        </div>
+                                        <div className="flex items-center space-x-3">
+                                            <img src={`data:image/png;base64,${stickerToApply}`} alt="Sticker to apply" className="w-16 h-16 rounded-md bg-white p-1 shadow-sm" />
+                                            <p className="text-xs text-slate-600 dark:text-slate-300">Update the prompt below to describe where to place this sticker on your image.</p>
+                                        </div>
+                                    </div>
+                                )}
                                 <div>
                                     <label htmlFor="prompt" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">2. Describe Your Edit</label>
                                     <input
@@ -295,7 +327,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator
                                     <button
                                         type="button"
                                         onClick={() => setIsMasking(true)}
-                                        disabled={isLoading || !hasImage}
+                                        disabled={isLoading || !hasImage || !!stickerToApply}
                                         className="flex-1 flex items-center justify-center space-x-2 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold py-2 px-3 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition disabled:bg-slate-100 dark:disabled:bg-slate-700 disabled:text-slate-400 dark:disabled:text-slate-500"
                                     >
                                         <MaskIcon className="h-5 w-5" />

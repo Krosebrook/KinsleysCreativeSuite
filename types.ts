@@ -4,7 +4,7 @@ export interface Message {
   sources?: { uri: string; title: string }[];
 }
 
-export type AppFeature = 'coloringBook' | 'imageEditor' | 'videoGenerator' | 'liveChat' | 'storyBooster';
+export type AppFeature = 'coloringBook' | 'imageEditor' | 'videoGenerator' | 'liveChat' | 'storyBooster' | 'stickerMaker';
 
 // Fix: Moved AIStudio interface and window augmentation here from VideoGenerator.tsx
 // to resolve a TypeScript error about subsequent property declarations. This ensures

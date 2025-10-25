@@ -255,3 +255,11 @@ export const SunIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
         <path d="m19.07 4.93-1.41 1.41" />
     </Icon>
 );
+
+export const StickerIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <Icon {...props}>
+        <path d="M15.5 2.5a2.5 2.5 0 0 0-3 0l-7 7a2.5 2.5 0 0 0 0 3.5l7 7a2.5 2.5 0 0 0 3.5 0l7-7a2.5 2.5 0 0 0 0-3.5Z" />
+        <path d="m14 7 3 3" />
+        <path d="M8.5 2.5 12 6" />
+    </Icon>
+);

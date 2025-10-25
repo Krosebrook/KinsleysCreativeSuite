@@ -211,11 +211,30 @@ export const generateColoringPages = async (
     }
 };
 
+export const generateSticker = async (prompt: string): Promise<string> => {
+    try {
+        const fullPrompt = `Create a die-cut sticker of: "${prompt}". The sticker should be visually appealing, with a distinct white border and a transparent background. The style should be fun and cartoonish.`;
+        const response = await ai.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: fullPrompt,
+            config: {
+              numberOfImages: 1,
+              outputMimeType: 'image/png', // PNG for transparency
+              aspectRatio: '1:1',
+            },
+        });
+        return response.generatedImages[0].image.imageBytes;
+    } catch (error) {
+        throw handleApiError(error, 'Sticker Generation');
+    }
+};
+
 export const editImage = async (
   base64ImageData: string,
   mimeType: string,
   prompt: string,
-  maskB64?: string | null
+  maskB64?: string | null,
+  stickerB64?: string | null
 ): Promise<string> => {
   try {
     const parts: any[] = [
@@ -225,10 +244,20 @@ export const editImage = async (
           mimeType: mimeType,
         },
       },
-      {
-        text: prompt,
-      },
     ];
+
+    if (stickerB64) {
+      parts.push({
+        inlineData: {
+          data: stickerB64,
+          mimeType: 'image/png', // Stickers are always PNGs with transparency
+        },
+      });
+    }
+
+    parts.push({
+      text: prompt,
+    });
 
     if (maskB64) {
       parts.push({
