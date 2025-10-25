@@ -96,7 +96,7 @@ export const DrawingCanvas = React.forwardRef<HTMLCanvasElement, DrawingCanvasPr
         <button
             onClick={onClick}
             aria-label={`Select ${targetTool} tool`}
-            className={`p-3 rounded-lg transition-colors ${currentTool === targetTool ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}
+            className={`p-3 rounded-lg transition-colors ${currentTool === targetTool ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-500'}`}
         >
             {children}
         </button>
@@ -104,24 +104,24 @@ export const DrawingCanvas = React.forwardRef<HTMLCanvasElement, DrawingCanvasPr
 
     return (
       <div className="flex flex-col items-center">
-        <div className="flex flex-wrap items-center justify-center gap-4 mb-4 p-3 bg-slate-100 rounded-xl shadow-sm">
+        <div className="flex flex-wrap items-center justify-center gap-4 mb-4 p-3 bg-slate-100 dark:bg-slate-700 rounded-xl shadow-sm">
             <div className="flex space-x-2">
                 <ToolButton currentTool={tool} targetTool="pencil" onClick={() => setTool('pencil')}><PencilIcon className="w-5 h-5" /></ToolButton>
                 <ToolButton currentTool={tool} targetTool="eraser" onClick={() => setTool('eraser')}><EraserIcon className="w-5 h-5" /></ToolButton>
             </div>
             <div className="flex items-center space-x-2">
-                <label htmlFor="colorPicker" className="text-sm font-medium text-slate-600">Color</label>
+                <label htmlFor="colorPicker" className="text-sm font-medium text-slate-600 dark:text-slate-300">Color</label>
                 <input
                     id="colorPicker"
                     type="color"
                     value={color}
                     onChange={(e) => setColor(e.target.value)}
                     disabled={tool !== 'pencil'}
-                    className="w-10 h-10 p-1 bg-white border border-slate-300 rounded-md cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                    className="w-10 h-10 p-1 bg-white dark:bg-slate-600 border border-slate-300 dark:border-slate-500 rounded-md cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                 />
             </div>
              <div className="flex items-center space-x-2">
-                <label htmlFor="lineWidth" className="text-sm font-medium text-slate-600">Size</label>
+                <label htmlFor="lineWidth" className="text-sm font-medium text-slate-600 dark:text-slate-300">Size</label>
                 <input
                     id="lineWidth"
                     type="range"
@@ -137,7 +137,7 @@ export const DrawingCanvas = React.forwardRef<HTMLCanvasElement, DrawingCanvasPr
           ref={internalCanvasRef}
           width={width}
           height={height}
-          className="bg-white border border-slate-300 rounded-lg cursor-crosshair max-w-full"
+          className="bg-white border border-slate-300 dark:border-slate-600 rounded-lg cursor-crosshair max-w-full"
           onMouseDown={startDrawing}
           onMouseMove={draw}
           onMouseUp={stopDrawing}

@@ -146,11 +146,15 @@ export const suggestTitles = async (text: string): Promise<string[]> => {
     }
 };
 
-export const generateStoryIdea = async (prompt: string): Promise<string> => {
+export const generateStoryIdea = async (prompt: string, genre: string): Promise<string> => {
     try {
+        const fullPrompt = genre && genre !== 'any'
+            ? `Write a short ${genre} story starter (around 100-150 words) based on this prompt: "${prompt}"`
+            : `Write a short story starter (around 100-150 words) based on this prompt: "${prompt}"`;
+            
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: `Write a short story starter (around 100-150 words) based on this prompt: "${prompt}"`,
+            contents: fullPrompt,
         });
         return response.text;
     } catch (error) {
@@ -255,6 +259,43 @@ export const editImage = async (
     throw handleApiError(error, 'Image Editing');
   }
 };
+
+export const convertImageToLineArt = async (
+  base64ImageData: string,
+  mimeType: string
+): Promise<string> => {
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              data: base64ImageData,
+              mimeType: mimeType,
+            },
+          },
+          {
+            text: 'Convert this image into a black and white line art coloring page. The lines should be clean, bold, and well-defined. Remove all colors, shadows, and gradients.',
+          },
+        ],
+      },
+      config: {
+        responseModalities: [Modality.IMAGE],
+      },
+    });
+
+    for (const part of response.candidates[0].content.parts) {
+      if (part.inlineData) {
+        return part.inlineData.data;
+      }
+    }
+    throw new Error("No line art image was returned from the model.");
+  } catch (error) {
+    throw handleApiError(error, 'Image to Line Art Conversion');
+  }
+};
+
 
 // --- Video Generation Functions ---
 

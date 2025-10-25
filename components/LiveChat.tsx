@@ -94,11 +94,12 @@ export const LiveChat: React.FC = () => {
 
         analyserRef.current.getByteTimeDomainData(dataArrayRef.current);
         
-        canvasCtx.fillStyle = 'rgb(241 245 249)'; // slate-100
+        const isDarkMode = document.documentElement.classList.contains('dark');
+        canvasCtx.fillStyle = isDarkMode ? 'rgb(15 23 42)' : 'rgb(241 245 249)'; // slate-900 or slate-100
         canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
         
         canvasCtx.lineWidth = 2;
-        canvasCtx.strokeStyle = 'rgb(79 70 229)'; // indigo-600
+        canvasCtx.strokeStyle = isDarkMode ? 'rgb(129 140 248)' : 'rgb(79 70 229)'; // indigo-400 or indigo-600
         
         canvasCtx.beginPath();
         
@@ -239,16 +240,16 @@ export const LiveChat: React.FC = () => {
     return (
         <>
             <header className="text-center mb-10 md:mb-12">
-                <h1 className="text-4xl md:text-5xl font-bold text-slate-800 tracking-tight">
+                <h1 className="text-4xl md:text-5xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">
                     Live Conversation
                 </h1>
-                <p className="mt-3 text-lg md:text-xl text-slate-600 max-w-2xl mx-auto">
+                <p className="mt-3 text-lg md:text-xl text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
                     Speak directly with a Gemini-powered AI assistant in real-time.
                 </p>
             </header>
 
-            <div className="max-w-md mx-auto bg-white p-8 rounded-2xl shadow-xl text-center">
-                <div className="mb-6 h-24 bg-slate-100 rounded-lg">
+            <div className="max-w-md mx-auto bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-xl text-center">
+                <div className="mb-6 h-24 bg-slate-100 dark:bg-slate-900 rounded-lg">
                     {isRecording && <canvas ref={canvasRef} className="w-full h-full" />}
                 </div>
 
@@ -263,7 +264,7 @@ export const LiveChat: React.FC = () => {
                 )}
 
                 {isConnecting && (
-                    <div className="flex flex-col items-center justify-center text-slate-500">
+                    <div className="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400">
                         <LoaderIcon className="w-12 h-12" />
                         <p className="mt-2 font-semibold">Connecting...</p>
                     </div>
@@ -281,7 +282,7 @@ export const LiveChat: React.FC = () => {
 
                 {error && <p className="mt-4 text-center text-red-700 bg-red-100 p-3 rounded-lg">{error}</p>}
                 
-                <p className="mt-6 text-sm text-slate-500">
+                <p className="mt-6 text-sm text-slate-500 dark:text-slate-400">
                     {isRecording ? "Your microphone is active. Start speaking to the assistant." : "Click 'Start' to begin your conversation. Make sure to allow microphone access."}
                 </p>
             </div>

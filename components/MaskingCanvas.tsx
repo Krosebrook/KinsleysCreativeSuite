@@ -105,25 +105,25 @@ export const MaskingCanvas: React.FC<MaskingCanvasProps> = ({ baseImageB64, onCl
     };
 
     const ToolButton: React.FC<{ currentTool: Tool, targetTool: Tool, children: React.ReactNode, onClick: () => void }> = ({ currentTool, targetTool, children, onClick }) => (
-        <button onClick={onClick} className={`p-3 rounded-lg transition-colors ${currentTool === targetTool ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}>{children}</button>
+        <button onClick={onClick} className={`p-3 rounded-lg transition-colors ${currentTool === targetTool ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-500'}`}>{children}</button>
     );
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4 animate-fade-in">
-            <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col">
-                <h3 className="text-2xl font-bold text-slate-800 mb-2 text-center">Create Mask</h3>
-                <p className="text-center text-slate-500 mb-4">Draw over the area you want the AI to edit.</p>
-                <div className="flex flex-wrap items-center justify-center gap-4 mb-4 p-3 bg-slate-100 rounded-xl shadow-sm">
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col">
+                <h3 className="text-2xl font-bold text-slate-800 dark:text-slate-200 mb-2 text-center">Create Mask</h3>
+                <p className="text-center text-slate-500 dark:text-slate-400 mb-4">Draw over the area you want the AI to edit.</p>
+                <div className="flex flex-wrap items-center justify-center gap-4 mb-4 p-3 bg-slate-100 dark:bg-slate-700 rounded-xl shadow-sm">
                     <div className="flex space-x-2">
                         <ToolButton currentTool={tool} targetTool="pencil" onClick={() => setTool('pencil')}><PencilIcon className="w-5 h-5" /></ToolButton>
                         <ToolButton currentTool={tool} targetTool="eraser" onClick={() => setTool('eraser')}><EraserIcon className="w-5 h-5" /></ToolButton>
                     </div>
                     <div className="flex items-center space-x-2">
-                        <label htmlFor="lineWidth" className="text-sm font-medium text-slate-600">Brush Size</label>
+                        <label htmlFor="lineWidth" className="text-sm font-medium text-slate-600 dark:text-slate-300">Brush Size</label>
                         <input id="lineWidth" type="range" min="5" max="150" value={lineWidth} onChange={(e) => setLineWidth(Number(e.target.value))} className="w-32" />
                     </div>
                 </div>
-                <div className="relative w-full max-h-[60vh] flex justify-center items-center overflow-hidden bg-slate-200 rounded-lg">
+                <div className="relative w-full max-h-[60vh] flex justify-center items-center overflow-hidden bg-slate-200 dark:bg-slate-900 rounded-lg">
                     <img ref={imageRef} src={`data:image/png;base64,${baseImageB64}`} alt="Image to mask" className="max-w-full max-h-full object-contain" />
                     <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full cursor-crosshair" onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseLeave={stopDrawing} onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing} />
                 </div>

@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { editImage } from '../services/geminiService';
+import { editImage, convertImageToLineArt } from '../services/geminiService';
 import { fileToBase64 } from '../utils/helpers';
-import { LoaderIcon, SparklesIcon, UndoIcon, RedoIcon, ImageIcon, SaveIcon, FolderOpenIcon, CheckIcon, XIcon, MaskIcon, VideoIcon } from './icons';
+import { LoaderIcon, SparklesIcon, UndoIcon, RedoIcon, ImageIcon, SaveIcon, FolderOpenIcon, CheckIcon, XIcon, MaskIcon, VideoIcon, BrushIcon } from './icons';
 import { MaskingCanvas } from './MaskingCanvas';
 
 const LOCAL_STORAGE_KEY = 'imageEditorSession';
 
 interface ImageEditorProps {
     onSendToVideoGenerator: (imageData: { b64: string; mimeType: string; }) => void;
+    onConvertToColoringPage: (newImageB64: string) => void;
 }
 
-export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator }) => {
+export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator, onConvertToColoringPage }) => {
     const [mimeType, setMimeType] = useState<string | null>(null);
     const [history, setHistory] = useState<string[]>([]);
     const [historyIndex, setHistoryIndex] = useState(-1);
@@ -19,6 +20,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator
     const [hasSavedSession, setHasSavedSession] = useState(false);
     const [prompt, setPrompt] = useState('Add a party hat to the main subject');
     const [isLoading, setIsLoading] = useState(false);
+    const [isConverting, setIsConverting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const [isMasking, setIsMasking] = useState(false);
@@ -99,7 +101,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator
     const handleRedo = () => {
         clearActiveEdits();
         if (canRedo) {
-            setHistoryIndex(historyIndex + 1);
+            setHistoryIndex(historyIndex - 1);
         }
     };
 
@@ -131,6 +133,20 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator
             } catch (e) {
                 setError("Could not parse saved session data.");
             }
+        }
+    };
+
+    const handleCreateColoringPage = async () => {
+        if (!currentImageB64 || !mimeType || isConverting) return;
+        setIsConverting(true);
+        setError(null);
+        try {
+            const lineArtB64 = await convertImageToLineArt(currentImageB64, mimeType);
+            onConvertToColoringPage(lineArtB64);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to convert image.');
+        } finally {
+            setIsConverting(false);
         }
     };
 
@@ -201,7 +217,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator
             type="button"
             onClick={() => generatePreview(effectPrompt)}
             disabled={isLoading || !hasImage || !!previewImageB64}
-            className="w-full bg-slate-100 text-slate-700 font-semibold py-2 px-3 rounded-lg hover:bg-slate-200 transition text-sm disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
+            className="w-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold py-2 px-3 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition text-sm disabled:bg-slate-50 dark:disabled:bg-slate-700/50 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed"
         >
             {children}
         </button>
@@ -220,32 +236,32 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator
                 />
             )}
             <header className="text-center mb-10 md:mb-12">
-                <h1 className="text-4xl md:text-5xl font-bold text-slate-800 tracking-tight">
+                <h1 className="text-4xl md:text-5xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">
                     AI Image Editor
                 </h1>
-                <p className="mt-3 text-lg md:text-xl text-slate-600 max-w-2xl mx-auto">
+                <p className="mt-3 text-lg md:text-xl text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
                     Upload a photo and use simple text prompts to make magical edits.
                 </p>
             </header>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto">
-                <div className="bg-white p-8 rounded-2xl shadow-xl space-y-6">
-                    <h2 className="text-2xl font-bold text-slate-800">Controls</h2>
+                <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-xl space-y-6">
+                    <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">Controls</h2>
                     <div>
-                        <label htmlFor="imageUpload" className="block text-sm font-medium text-slate-700 mb-1">1. Upload Image</label>
+                        <label htmlFor="imageUpload" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">1. Upload Image</label>
                         <input
                             id="imageUpload"
                             type="file"
                             accept="image/png, image/jpeg"
                             onChange={handleFileChange}
-                            className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 transition"
+                            className="w-full text-sm text-slate-500 dark:text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 dark:file:bg-indigo-900/50 file:text-indigo-700 dark:file:text-indigo-300 hover:file:bg-indigo-100 dark:hover:file:bg-indigo-900 transition"
                             disabled={isLoading}
                         />
                     </div>
                     
                     {previewImageB64 ? (
-                        <div className="space-y-4 text-center p-4 bg-indigo-50 rounded-lg">
-                            <p className="font-semibold text-indigo-800">Confirm or Discard Preview</p>
+                        <div className="space-y-4 text-center p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
+                            <p className="font-semibold text-indigo-800 dark:text-indigo-200">Confirm or Discard Preview</p>
                             <div className="flex justify-center space-x-4">
                                 <button onClick={handleConfirmEdit} className="flex-1 flex items-center justify-center space-x-2 bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 transition shadow-md">
                                     <CheckIcon className="h-5 w-5" />
@@ -261,26 +277,26 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator
                         <div className="space-y-4">
                             <form onSubmit={handleManualPreview}>
                                 <div>
-                                    <label htmlFor="prompt" className="block text-sm font-medium text-slate-700 mb-1">2. Describe Your Edit</label>
+                                    <label htmlFor="prompt" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">2. Describe Your Edit</label>
                                     <input
                                         id="prompt"
                                         type="text"
                                         value={prompt}
                                         onChange={(e) => setPrompt(e.target.value)}
                                         placeholder="e.g., Make the sky look like a galaxy"
-                                        className="w-full px-4 py-2 bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                                        className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
                                         disabled={isLoading || !hasImage}
                                     />
                                 </div>
                             </form>
-                             <div className="p-4 bg-slate-50 rounded-lg space-y-3">
-                                <label className="block text-sm font-medium text-slate-700">Optional: Apply Edit to a Specific Area</label>
+                             <div className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg space-y-3">
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Optional: Apply Edit to a Specific Area</label>
                                 <div className="flex space-x-2">
                                     <button
                                         type="button"
                                         onClick={() => setIsMasking(true)}
                                         disabled={isLoading || !hasImage}
-                                        className="flex-1 flex items-center justify-center space-x-2 bg-slate-200 text-slate-700 font-semibold py-2 px-3 rounded-lg hover:bg-slate-300 transition disabled:bg-slate-100 disabled:text-slate-400"
+                                        className="flex-1 flex items-center justify-center space-x-2 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold py-2 px-3 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition disabled:bg-slate-100 dark:disabled:bg-slate-700 disabled:text-slate-400 dark:disabled:text-slate-500"
                                     >
                                         <MaskIcon className="h-5 w-5" />
                                         <span>{activeMaskB64 ? 'Edit Mask' : 'Create Mask'}</span>
@@ -290,19 +306,19 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator
                                             type="button"
                                             onClick={() => setActiveMaskB64(null)}
                                             disabled={isLoading}
-                                            className="p-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 transition"
+                                            className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 transition"
                                             aria-label="Clear mask"
                                         >
                                             <XIcon className="h-5 w-5" />
                                         </button>
                                     )}
                                 </div>
-                                {activeMaskB64 && <p className="text-xs text-green-700 text-center flex items-center justify-center space-x-1"><CheckIcon className="h-3 w-3" /><span>Mask applied. Edits will target the selected area.</span></p>}
+                                {activeMaskB64 && <p className="text-xs text-green-700 dark:text-green-400 text-center flex items-center justify-center space-x-1"><CheckIcon className="h-3 w-3" /><span>Mask applied. Edits will target the selected area.</span></p>}
                             </div>
                             <button
                                 type="button"
                                 onClick={(e) => handleManualPreview(e as any)}
-                                className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center space-x-2 shadow-lg"
+                                className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed flex items-center justify-center space-x-2 shadow-lg"
                                 disabled={isLoading || !hasImage || !prompt}
                             >
                                 {isLoading ? <><LoaderIcon className="h-5 w-5" /><span>Generating Preview...</span></> : <><SparklesIcon className="h-5 w-5" /><span>Preview Edit</span></>}
@@ -311,47 +327,49 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator
                     )}
 
                     <div className="space-y-3">
-                        <label className="block text-sm font-medium text-slate-700 text-center">Or Try a Quick Effect</label>
-                        <div className="grid grid-cols-2 gap-3">
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 text-center">Or Try a Quick Effect</label>
+                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                             <QuickEffectButton effectPrompt={'Apply a vintage photo effect'}>Vintage</QuickEffectButton>
                             <QuickEffectButton effectPrompt={'Add a vibrant neon glow to the edges'}>Neon Glow</QuickEffectButton>
                             <QuickEffectButton effectPrompt={'Convert the image to a black and white pencil sketch'}>Sketch</QuickEffectButton>
-                            <QuickEffectButton effectPrompt={'Apply a warm sepia tone'}>Sepia Tone</QuickEffectButton>
+                            <QuickEffectButton effectPrompt={'Pixelate the image, giving it a retro 8-bit look'}>Pixelate</QuickEffectButton>
+                            <QuickEffectButton effectPrompt={'Convert the image into a pop art style, like Andy Warhol'}>Pop Art</QuickEffectButton>
+                            <QuickEffectButton effectPrompt={'Transform the photo into a watercolor painting'}>Watercolor</QuickEffectButton>
                         </div>
                         <QuickEffectButton effectPrompt={'Remove the background'}>Remove Background</QuickEffectButton>
                     </div>
                     
                     <div className="space-y-4">
-                        <label className="block text-sm font-medium text-slate-700 mb-2 text-center">3. History</label>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 text-center">3. History</label>
                         <div className="flex justify-center items-center space-x-2">
-                            <button onClick={handleUndo} disabled={!canUndo || isLoading || !!previewImageB64} className="flex items-center space-x-2 bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed transition">
+                            <button onClick={handleUndo} disabled={!canUndo || isLoading || !!previewImageB64} className="flex items-center space-x-2 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 disabled:bg-slate-100 dark:disabled:bg-slate-700 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed transition">
                                 <UndoIcon className="h-5 w-5" />
                                 <span>Undo</span>
                             </button>
                             <div className="w-28 text-center">
                                 {hasImage && (
-                                    <span className="text-sm font-medium text-slate-500 tabular-nums">
+                                    <span className="text-sm font-medium text-slate-500 dark:text-slate-400 tabular-nums">
                                         Step {historyIndex + 1} of {history.length}
                                     </span>
                                 )}
                             </div>
-                            <button onClick={handleRedo} disabled={!canRedo || isLoading || !!previewImageB64} className="flex items-center space-x-2 bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed transition">
+                            <button onClick={handleRedo} disabled={!canRedo || isLoading || !!previewImageB64} className="flex items-center space-x-2 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 disabled:bg-slate-100 dark:disabled:bg-slate-700 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed transition">
                                 <RedoIcon className="h-5 w-5" />
                                 <span>Redo</span>
                             </button>
                         </div>
 
                         {hasImage && (
-                            <div className="flex overflow-x-auto space-x-3 p-2 bg-slate-100 rounded-lg">
+                            <div className="flex overflow-x-auto space-x-3 p-2 bg-slate-100 dark:bg-slate-900/70 rounded-lg">
                                 {history.map((imgB64, index) => (
                                     <button
                                         key={index}
                                         onClick={() => { clearActiveEdits(); setHistoryIndex(index); }}
                                         disabled={!!previewImageB64}
-                                        className={`flex-shrink-0 w-20 h-20 bg-white p-1 rounded-md overflow-hidden focus:outline-none transition-all duration-200 ${
+                                        className={`flex-shrink-0 w-20 h-20 bg-white dark:bg-slate-700 p-1 rounded-md overflow-hidden focus:outline-none transition-all duration-200 ${
                                             historyIndex === index
-                                                ? 'ring-4 ring-indigo-500 ring-offset-2'
-                                                : 'ring-1 ring-slate-300 hover:ring-indigo-400'
+                                                ? 'ring-4 ring-indigo-500 ring-offset-2 dark:ring-offset-slate-800'
+                                                : 'ring-1 ring-slate-300 dark:ring-slate-600 hover:ring-indigo-400'
                                         } ${!!previewImageB64 ? 'cursor-not-allowed opacity-50' : ''}`}
                                         aria-label={`Go to step ${index + 1}`}
                                     >
@@ -365,49 +383,57 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator
                             </div>
                         )}
                         
-                        <div className="border-t pt-4">
-                            <label className="block text-sm font-medium text-slate-700 mb-2 text-center">Session & Actions</label>
+                        <div className="border-t dark:border-slate-700 pt-4">
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 text-center">Session & Actions</label>
                              <div className="flex justify-center space-x-4 mb-4">
-                                <button onClick={handleSave} disabled={!hasImage || isLoading || !!previewImageB64} className="flex items-center space-x-2 bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed transition">
+                                <button onClick={handleSave} disabled={!hasImage || isLoading || !!previewImageB64} className="flex items-center space-x-2 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 disabled:bg-slate-100 dark:disabled:bg-slate-700 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed transition">
                                     <SaveIcon className="h-5 w-5" />
                                     <span>Save</span>
                                 </button>
-                                <button onClick={handleLoad} disabled={!hasSavedSession || isLoading || !!previewImageB64} className="flex items-center space-x-2 bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed transition">
+                                <button onClick={handleLoad} disabled={!hasSavedSession || isLoading || !!previewImageB64} className="flex items-center space-x-2 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 disabled:bg-slate-100 dark:disabled:bg-slate-700 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed transition">
                                     <FolderOpenIcon className="h-5 w-5" />
                                     <span>Load</span>
                                 </button>
                             </div>
-                             <button
-                                onClick={() => {
-                                    if(currentImageB64 && mimeType) {
-                                        onSendToVideoGenerator({ b64: currentImageB64, mimeType })
-                                    }
-                                }}
-// Fix: Corrected typo from previewImageB6á4 to previewImageB64
-                                disabled={!hasImage || isLoading || !!previewImageB64}
-                                className="w-full flex items-center justify-center space-x-2 bg-purple-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-purple-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition shadow-md"
-                            >
-                                <VideoIcon className="h-5 w-5" />
-                                <span>Animate this Image</span>
-                            </button>
+                             <div className="grid grid-cols-2 gap-4">
+                                 <button
+                                    onClick={handleCreateColoringPage}
+                                    disabled={!hasImage || isLoading || !!previewImageB64 || isConverting}
+                                    className="w-full flex items-center justify-center space-x-2 bg-teal-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-teal-700 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed transition shadow-md"
+                                >
+                                    {isConverting ? <><LoaderIcon className="h-5 w-5" /><span>Converting...</span></> : <><BrushIcon className="h-5 w-5" /><span>Create Coloring Page</span></>}
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        if(currentImageB64 && mimeType) {
+                                            onSendToVideoGenerator({ b64: currentImageB64, mimeType })
+                                        }
+                                    }}
+                                    disabled={!hasImage || isLoading || !!previewImageB64}
+                                    className="w-full flex items-center justify-center space-x-2 bg-purple-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-purple-700 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed transition shadow-md"
+                                >
+                                    <VideoIcon className="h-5 w-5" />
+                                    <span>Animate this Image</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                      {renderError()}
                 </div>
 
-                <div className="bg-white p-8 rounded-2xl shadow-xl flex items-center justify-center">
+                <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-xl flex items-center justify-center">
                     {imageToDisplay ? (
                         <div className="relative w-full h-full">
                             <img src={`data:image/png;base64,${imageToDisplay}`} alt="Edited result" className="w-full h-full object-contain rounded-lg" />
                             {isLoading && (
-                                <div className="absolute inset-0 bg-white bg-opacity-70 flex flex-col items-center justify-center rounded-lg">
+                                <div className="absolute inset-0 bg-white/70 dark:bg-slate-800/70 flex flex-col items-center justify-center rounded-lg">
                                     <LoaderIcon className="w-12 h-12 text-indigo-500" />
-                                    <p className="mt-2 font-semibold text-slate-600">Generating Preview...</p>
+                                    <p className="mt-2 font-semibold text-slate-600 dark:text-slate-300">Generating Preview...</p>
                                 </div>
                             )}
                         </div>
                     ) : (
-                        <div className="text-center text-slate-400 flex flex-col items-center">
+                        <div className="text-center text-slate-400 dark:text-slate-500 flex flex-col items-center">
                              <ImageIcon className="w-16 h-16 mb-4" />
                             <p className="text-lg font-semibold">Upload an image to start editing</p>
                             <p className="text-sm">Your edited photo will appear here.</p>
