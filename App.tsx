@@ -144,7 +144,7 @@ const AppContent: React.FC = () => {
         </div>
       </main>
       
-      <Chatbot />
+      <Chatbot activeFeature={activeFeature} />
       
       <footer className="text-center py-6 text-sm text-slate-500 dark:text-slate-400">
         <p>Created with the power of Google Gemini.</p>

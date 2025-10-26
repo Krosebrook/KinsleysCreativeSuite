@@ -1,11 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
-import type { Message } from '../types';
+import type { Message, AppFeature } from '../types';
 import { BotIcon, LoaderIcon, MessageSquareIcon, SendIcon, SparklesIcon, XIcon, PaperclipIcon, UserIcon, CheckIcon } from './icons';
 import { sendMessageToModel } from '../services/geminiService';
 import { useProjects } from '../contexts/ProjectContext';
 import { fileToBase64 } from '../utils/helpers';
 
-export const Chatbot: React.FC = () => {
+interface ChatbotProps {
+    activeFeature: AppFeature | null;
+}
+
+export const Chatbot: React.FC<ChatbotProps> = ({ activeFeature }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<Message[]>([
         { role: 'model', text: 'Hello! How can I help? You can ask about your project or upload an image.', timestamp: Date.now() }
@@ -89,9 +93,10 @@ export const Chatbot: React.FC = () => {
                 messages, // Pass the history *before* the new user message
                 activeProject,
                 currentImage ? { b64: currentImage.b64, mimeType: currentImage.mimeType } : null,
-                useGrounded
+                useGrounded,
+                activeFeature
             );
-            setMessages(prev => [...prev, { ...modelMessage, timestamp: Date.now() }]);
+            setMessages(prev => [...prev, modelMessage]);
         } catch (err) {
             let userFriendlyMessage = 'An unexpected error occurred during the chat. Please try again.';
 
@@ -149,7 +154,7 @@ export const Chatbot: React.FC = () => {
                         </div>
                         <div className={`max-w-[80%] flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                             <div 
-                                className={`relative p-3 rounded-2xl shadow-sm cursor-pointer transition-shadow hover:shadow-lg ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-gray-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-bl-none'}`}
+                                className={`relative p-3 rounded-2xl shadow-sm cursor-pointer transition-shadow hover:shadow-lg ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-bl-none'}`}
                                 onClick={() => handleCopyMessage(msg.text, msg.timestamp)}
                                 title="Click to copy message"
                             >

@@ -1,5 +1,5 @@
 import { GoogleGenAI, Modality, Type, Content, Part } from "@google/genai";
-import type { Message, Project, StoryboardScene } from "../types";
+import type { Message, Project, StoryboardScene, AppFeature } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
@@ -60,12 +60,35 @@ const handleApiError = (error: unknown, context: string): Error => {
 
 // --- Chat Function (New unified, stateless implementation) ---
 
+const getSystemInstruction = (feature: AppFeature | null): string => {
+    switch (feature) {
+        case 'imageEditor':
+            return 'You are an expert image editing assistant. You specialize in providing creative prompts for image manipulation, suggesting color palettes, and offering advice on composition. You are aware of the user\'s project assets like characters and styles.';
+        case 'storyBooster':
+            return 'You are a professional writing coach. You help users improve their stories by providing feedback on plot, character, and pacing. You can help brainstorm ideas, suggest titles, and enhance prose.';
+        case 'videoGenerator':
+            return 'You are a helpful film directing assistant. You can suggest cinematic shots, camera angles, and transitions. You can help write compelling prompts for video generation and extensions.';
+        case 'coloringBook':
+            return 'You are a fun and encouraging assistant for creating coloring books. You can suggest themes, art styles, and fun prompts for pages. You know how to create prompts suitable for black and white line art.';
+        case 'stickerMaker':
+            return 'You are a creative assistant specializing in sticker design. You can help brainstorm ideas for cute, cool, or funny stickers and write effective prompts to generate them with a transparent background.';
+        case 'storyboardGenerator':
+             return 'You are a storyboard artist assistant. You help users visualize their stories by suggesting key scenes, camera shots, and character poses. You can help refine image prompts to ensure visual consistency.';
+        case 'liveChat':
+             return 'You are a friendly and helpful conversational AI. Keep your responses concise and natural. You are in a real-time voice chat.';
+        // for projectHub or null activeFeature
+        default:
+            return 'You are a friendly and helpful creative assistant for the Gemini Creative Suite. You are aware of the user\'s current project assets and can see images they upload. Provide concise, helpful, and creative responses.';
+    }
+};
+
 export const sendMessageToModel = async (
     prompt: string,
     history: Message[],
     project: Project | null,
     image: { b64: string; mimeType: string } | null,
-    useGroundedSearch: boolean
+    useGroundedSearch: boolean,
+    activeFeature: AppFeature | null
 ): Promise<Message> => {
     try {
         const model = image ? 'gemini-2.5-flash-image' : 'gemini-2.5-flash';
@@ -109,7 +132,7 @@ export const sendMessageToModel = async (
         contents.push({ role: 'user', parts: userParts });
 
         const config: any = {
-            systemInstruction: 'You are a friendly and helpful creative assistant for the Gemini Creative Suite. You are aware of the user\'s current project assets and can see images they upload. Provide concise, helpful, and creative responses.'
+            systemInstruction: getSystemInstruction(activeFeature)
         };
         
         // Grounded search is not compatible with image models or multi-part inputs.
