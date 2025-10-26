@@ -1,8 +1,8 @@
 import React from 'react';
-import type { Project, ProjectAsset, AppFeature } from '../types';
+import type { Project, ProjectAsset, AppFeature, Character } from '../types';
 import { 
     ArrowLeftIcon, BrushIcon, ImageIcon, VideoIcon, MicIcon, BookOpenIcon, StickerIcon, TrashIcon,
-    SparklesIcon
+    SparklesIcon, UserIcon
 } from './icons';
 
 interface ProjectDetailProps {
@@ -23,8 +23,7 @@ const featureMap: Record<Exclude<AppFeature, 'projectHub'>, { icon: React.Elemen
 const features = Object.keys(featureMap) as Exclude<AppFeature, 'projectHub'>[];
 
 const AssetCard: React.FC<{ asset: ProjectAsset }> = ({ asset }) => {
-    // FIX: 'coloringPage' is not a valid AssetType. Removed it from the check.
-    const isImage = asset.type === 'image' || asset.type === 'sticker';
+    const isImage = asset.type === 'image' || asset.type === 'sticker' || asset.type === 'character';
     
     return (
         <div className="bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow">
@@ -39,6 +38,15 @@ const AssetCard: React.FC<{ asset: ProjectAsset }> = ({ asset }) => {
         </div>
     );
 };
+
+const CharacterCard: React.FC<{ character: Character }> = ({ character }) => (
+    <div className="flex-shrink-0 w-32 text-center">
+        <div className="w-32 h-32 bg-slate-200 dark:bg-slate-700 rounded-lg mb-2 overflow-hidden">
+            <img src={`data:image/png;base64,${character.imageB64}`} alt={character.name} className="w-full h-full object-cover" />
+        </div>
+        <h4 className="font-bold text-sm text-slate-800 dark:text-slate-200 truncate">{character.name}</h4>
+    </div>
+);
 
 export const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, onLaunchTool, onBackToHub, onDeleteProject }) => {
     const assetsByType = project.assets.reduce((acc, asset) => {
@@ -87,12 +95,26 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, onLaunchT
                 </div>
 
                 {/* Right column for assets */}
-                <div className="lg:col-span-2">
-                    <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-xl min-h-[60vh]">
+                <div className="lg:col-span-2 space-y-8">
+                    {/* NEW: Character Sheet Section */}
+                    <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-xl">
+                        <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200 mb-4 flex items-center space-x-2">
+                            <UserIcon className="w-6 h-6 text-amber-500" />
+                            <span>Character Sheet</span>
+                        </h2>
+                        {project.characterSheet && project.characterSheet.length > 0 ? (
+                            <div className="flex space-x-4 overflow-x-auto pb-2 -mb-2">
+                                {project.characterSheet.map(char => <CharacterCard key={char.id} character={char} />)}
+                            </div>
+                        ) : (
+                            <p className="text-slate-500 dark:text-slate-400">No characters yet. Go to the Image Editor to create and save one!</p>
+                        )}
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-xl min-h-[40vh]">
                         <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200 mb-4">Project Assets ({project.assets.length})</h2>
                         {project.assets.length > 0 ? (
                             <div className="space-y-6">
-                                {/* FIX: Changed from Object.entries to Object.keys to improve type inference and resolve 'map does not exist on unknown' error. */}
                                 {Object.keys(assetsByType).map((type) => (
                                     <div key={type}>
                                         <h3 className="text-lg font-semibold text-slate-600 dark:text-slate-300 mb-3 capitalize border-b border-slate-200 dark:border-slate-700 pb-2">{type}s</h3>

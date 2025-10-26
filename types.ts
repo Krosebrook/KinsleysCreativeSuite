@@ -1,3 +1,5 @@
+import { type Blob } from "@google/genai";
+
 export interface Message {
   role: 'user' | 'model';
   text: string;
@@ -6,8 +8,16 @@ export interface Message {
 
 export type AppFeature = 'projectHub' | 'coloringBook' | 'imageEditor' | 'videoGenerator' | 'liveChat' | 'storyBooster' | 'stickerMaker';
 
+// NEW: Character Sheet type
+export interface Character {
+  id: string;
+  name: string;
+  imageB64: string;
+  prompt: string;
+}
+
 // NEW: Project Hub types
-export type AssetType = 'story' | 'image' | 'sticker' | 'video' | 'coloringBookPdf';
+export type AssetType = 'story' | 'image' | 'sticker' | 'video' | 'coloringBookPdf' | 'character';
 
 export interface ProjectAsset {
   id: string; // e.g., timestamp
@@ -24,6 +34,7 @@ export interface Project {
   description: string;
   lastModified: number;
   assets: ProjectAsset[];
+  characterSheet: Character[]; // NEW: For character consistency
 }
 
 

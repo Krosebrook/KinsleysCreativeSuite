@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { editImage, convertImageToLineArt } from '../services/geminiService';
 import { fileToBase64 } from '../utils/helpers';
-import { LoaderIcon, SparklesIcon, UndoIcon, RedoIcon, ImageIcon, SaveIcon, CheckIcon, XIcon, MaskIcon, VideoIcon, BrushIcon, ArrowLeftIcon } from './icons';
+import { LoaderIcon, SparklesIcon, UndoIcon, RedoIcon, ImageIcon, SaveIcon, CheckIcon, XIcon, MaskIcon, VideoIcon, BrushIcon, ArrowLeftIcon, UserIcon } from './icons';
 import { MaskingCanvas } from './MaskingCanvas';
-import type { Project, ProjectAsset } from '../types';
+import type { Project, ProjectAsset, Character } from '../types';
 
 interface ImageEditorProps {
     project: Project;
@@ -11,10 +11,30 @@ interface ImageEditorProps {
     onBack: () => void;
     onSendToVideoGenerator: (imageData: { b64: string; mimeType: string; }) => void;
     onConvertToColoringPage: (newImageB64: string) => void;
+    onAddCharacter: (characterData: Omit<Character, 'id'>) => void;
     incomingStickerB64?: string | null;
 }
 
-export const ImageEditor: React.FC<ImageEditorProps> = ({ project, onSaveAsset, onBack, onSendToVideoGenerator, onConvertToColoringPage, incomingStickerB64 }) => {
+const AddCharacterModal: React.FC<{
+    onClose: () => void;
+    onSave: (name: string) => void;
+}> = ({ onClose, onSave }) => {
+    const [name, setName] = useState('');
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-2xl w-full max-w-sm relative">
+                <h3 className="text-xl font-bold text-center mb-4">Add to Character Sheet</h3>
+                <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Enter character name..." className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <div className="flex justify-end space-x-2">
+                    <button onClick={onClose} className="py-2 px-4 bg-slate-200 dark:bg-slate-600 rounded-lg font-semibold">Cancel</button>
+                    <button onClick={() => { if(name.trim()) onSave(name.trim()); }} disabled={!name.trim()} className="py-2 px-4 bg-indigo-600 text-white rounded-lg font-semibold disabled:bg-slate-400">Save</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export const ImageEditor: React.FC<ImageEditorProps> = ({ project, onSaveAsset, onBack, onSendToVideoGenerator, onConvertToColoringPage, onAddCharacter, incomingStickerB64 }) => {
     const [mimeType, setMimeType] = useState<string | null>(null);
     const [history, setHistory] = useState<string[]>([]);
     const [historyIndex, setHistoryIndex] = useState(-1);
@@ -29,6 +49,10 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ project, onSaveAsset, 
     const [activeMaskB64, setActiveMaskB64] = useState<string | null>(null);
     const [stickerToApply, setStickerToApply] = useState<string | null>(null);
 
+    // NEW: Character Sheet State
+    const [selectedCharacterB64, setSelectedCharacterB64] = useState<string | null>(null);
+    const [isAddCharacterModalOpen, setIsAddCharacterModalOpen] = useState(false);
+
     const currentImageB64 = historyIndex >= 0 ? history[historyIndex] : null;
     const imageToDisplay = previewImageB64 || currentImageB64;
     const canUndo = historyIndex > 0;
@@ -42,6 +66,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ project, onSaveAsset, 
                 return;
             }
             setStickerToApply(incomingStickerB64);
+            setSelectedCharacterB64(null); // Can't use sticker and character at same time
             setPrompt('Place the sticker on the main subject of the primary image.');
         }
     }, [incomingStickerB64, hasImage]);
@@ -57,6 +82,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ project, onSaveAsset, 
         if (file) {
             clearActiveEdits();
             setStickerToApply(null);
+            setSelectedCharacterB64(null);
             setPrompt('Add a party hat to the main subject');
             const b64 = await fileToBase64(file);
             setMimeType(file.type);
@@ -74,7 +100,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ project, onSaveAsset, 
         setPreviewImageB64(null);
 
         try {
-            const editedB64 = await editImage(currentImageB64, mimeType, editPrompt, activeMaskB64, stickerToApply);
+            const editedB64 = await editImage(currentImageB64, mimeType, editPrompt, activeMaskB64, stickerToApply, selectedCharacterB64);
             setPreviewImageB64(editedB64);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'An unknown error occurred.');
@@ -144,11 +170,31 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ project, onSaveAsset, 
         }
     };
 
+    const handleSaveCharacter = (name: string) => {
+        if (currentImageB64) {
+            onAddCharacter({
+                name,
+                imageB64: currentImageB64,
+                prompt,
+            });
+            setIsAddCharacterModalOpen(false);
+        }
+    };
+    
+    const handleSelectCharacter = (characterB64: string) => {
+        setStickerToApply(null); // Can't use both
+        if (selectedCharacterB64 === characterB64) {
+            setSelectedCharacterB64(null); // Toggle off
+        } else {
+            setSelectedCharacterB64(characterB64);
+        }
+    };
+
     const QuickEffectButton: React.FC<{ children: React.ReactNode, effectPrompt: string }> = ({ children, effectPrompt }) => (
         <button
             type="button"
             onClick={() => generatePreview(effectPrompt)}
-            disabled={isLoading || !hasImage || !!previewImageB64 || !!stickerToApply}
+            disabled={isLoading || !hasImage || !!previewImageB64 || !!stickerToApply || !!selectedCharacterB64}
             className="w-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold py-2 px-3 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition text-sm disabled:bg-slate-50 dark:disabled:bg-slate-700/50 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed"
         >
             {children}
@@ -157,16 +203,9 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ project, onSaveAsset, 
 
     return (
         <>
-            {isMasking && currentImageB64 && (
-                <MaskingCanvas
-                    baseImageB64={currentImageB64}
-                    onClose={() => setIsMasking(false)}
-                    onSave={(mask) => {
-                        setActiveMaskB64(mask);
-                        setIsMasking(false);
-                    }}
-                />
-            )}
+            {isMasking && currentImageB64 && <MaskingCanvas baseImageB64={currentImageB64} onClose={() => setIsMasking(false)} onSave={(mask) => {setActiveMaskB64(mask); setIsMasking(false);}} />}
+            {isAddCharacterModalOpen && <AddCharacterModal onClose={() => setIsAddCharacterModalOpen(false)} onSave={handleSaveCharacter} />}
+            
             <header className="flex items-center justify-between mb-10 md:mb-12">
                 <button onClick={onBack} className="flex items-center space-x-2 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition font-semibold">
                     <ArrowLeftIcon className="w-5 h-5" />
@@ -178,157 +217,82 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ project, onSaveAsset, 
                 <div className="w-32"></div> {/* Spacer */}
             </header>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-7xl mx-auto">
                 <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-xl space-y-6">
-                    <div className="flex justify-between items-start">
+                    <div className="flex justify-between items-start gap-2">
                         <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">Controls</h2>
-                        <button onClick={handleSaveToProject} disabled={!hasImage || isLoading || !!previewImageB64} className="flex items-center space-x-2 bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed transition shadow-md">
-                            <SaveIcon className="h-5 w-5" />
-                            <span>Save to Project</span>
-                        </button>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                            <button onClick={() => setIsAddCharacterModalOpen(true)} disabled={!hasImage || isLoading || !!previewImageB64} className="flex items-center space-x-2 bg-amber-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-amber-600 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed transition shadow-md whitespace-nowrap">
+                                <UserIcon className="h-5 w-5" />
+                                <span>Add to Character Sheet</span>
+                            </button>
+                            <button onClick={handleSaveToProject} disabled={!hasImage || isLoading || !!previewImageB64} className="flex items-center space-x-2 bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed transition shadow-md">
+                                <SaveIcon className="h-5 w-5" />
+                                <span>Save to Project</span>
+                            </button>
+                        </div>
                     </div>
 
                     <div>
                         <label htmlFor="imageUpload" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">1. Upload Image</label>
-                        <input
-                            id="imageUpload"
-                            type="file"
-                            accept="image/png, image/jpeg"
-                            onChange={handleFileChange}
-                            className="w-full text-sm text-slate-500 dark:text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 dark:file:bg-indigo-900/50 file:text-indigo-700 dark:file:text-indigo-300 hover:file:bg-indigo-100 dark:hover:file:bg-indigo-900 transition"
-                            disabled={isLoading}
-                        />
+                        <input id="imageUpload" type="file" accept="image/png, image/jpeg" onChange={handleFileChange} className="w-full text-sm text-slate-500 dark:text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 dark:file:bg-indigo-900/50 file:text-indigo-700 dark:file:text-indigo-300 hover:file:bg-indigo-100 dark:hover:file:bg-indigo-900 transition" disabled={isLoading} />
                     </div>
                     
                     {previewImageB64 ? (
                         <div className="space-y-4 text-center p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
                             <p className="font-semibold text-indigo-800 dark:text-indigo-200">Confirm or Discard Preview</p>
                             <div className="flex justify-center space-x-4">
-                                <button onClick={handleConfirmEdit} className="flex-1 flex items-center justify-center space-x-2 bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 transition shadow-md">
-                                    <CheckIcon className="h-5 w-5" />
-                                    <span>Confirm Edit</span>
-                                </button>
-                                <button onClick={handleDiscardPreview} className="flex-1 flex items-center justify-center space-x-2 bg-slate-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-slate-600 transition shadow-md">
-                                    <XIcon className="h-5 w-5" />
-                                    <span>Discard</span>
-                                </button>
+                                <button onClick={handleConfirmEdit} className="flex-1 flex items-center justify-center space-x-2 bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 transition shadow-md"><CheckIcon className="h-5 w-5" /><span>Confirm Edit</span></button>
+                                <button onClick={handleDiscardPreview} className="flex-1 flex items-center justify-center space-x-2 bg-slate-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-slate-600 transition shadow-md"><XIcon className="h-5 w-5" /><span>Discard</span></button>
                             </div>
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            <form onSubmit={handleManualPreview}>
-                                {stickerToApply && (
-                                    <div className="p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg space-y-2">
-                                        <div className="flex justify-between items-center">
-                                            <p className="text-sm font-semibold text-indigo-800 dark:text-indigo-200">Applying Sticker</p>
-                                            <button onClick={() => setStickerToApply(null)} className="text-xs text-slate-500 dark:text-slate-400 hover:underline">Clear</button>
-                                        </div>
-                                        <div className="flex items-center space-x-3">
-                                            <img src={`data:image/png;base64,${stickerToApply}`} alt="Sticker to apply" className="w-16 h-16 rounded-md bg-white p-1 shadow-sm" />
-                                            <p className="text-xs text-slate-600 dark:text-slate-300">Update the prompt below to describe where to place this sticker on your image.</p>
-                                        </div>
+                            {project.characterSheet?.length > 0 && (
+                                <div className="space-y-2">
+                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">2. Use a Project Character (Optional)</label>
+                                    <div className="flex items-center space-x-3 p-2 bg-slate-50 dark:bg-slate-700/50 rounded-lg overflow-x-auto">
+                                        {project.characterSheet.map(char => (
+                                            <button key={char.id} onClick={() => handleSelectCharacter(char.imageB64)} className={`flex-shrink-0 p-1.5 rounded-lg border-2 transition ${selectedCharacterB64 === char.imageB64 ? 'border-indigo-500' : 'border-transparent hover:border-slate-300 dark:hover:border-slate-500'}`}>
+                                                <img src={`data:image/png;base64,${char.imageB64}`} alt={char.name} title={char.name} className="w-16 h-16 object-cover rounded-md" />
+                                                <p className="text-xs font-semibold mt-1 truncate w-16">{char.name}</p>
+                                            </button>
+                                        ))}
+                                        {selectedCharacterB64 && <button onClick={() => setSelectedCharacterB64(null)} className="text-xs p-1 rounded-full bg-slate-200 dark:bg-slate-600 self-start"><XIcon className="w-4 h-4" /></button>}
                                     </div>
-                                )}
+                                </div>
+                            )}
+                            <form onSubmit={handleManualPreview}>
                                 <div>
-                                    <label htmlFor="prompt" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">2. Describe Your Edit</label>
-                                    <input
-                                        id="prompt"
-                                        type="text"
-                                        value={prompt}
-                                        onChange={(e) => setPrompt(e.target.value)}
-                                        placeholder="e.g., Make the sky look like a galaxy"
-                                        className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
-                                        disabled={isLoading || !hasImage}
-                                    />
+                                    <label htmlFor="prompt" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{project.characterSheet?.length > 0 ? '3.' : '2.'} Describe Your Edit</label>
+                                    <input id="prompt" type="text" value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="e.g., Make the sky look like a galaxy" className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition" disabled={isLoading || !hasImage} />
                                 </div>
                             </form>
-                             <div className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg space-y-3">
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Optional: Apply Edit to a Specific Area</label>
-                                <div className="flex space-x-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsMasking(true)}
-                                        disabled={isLoading || !hasImage || !!stickerToApply}
-                                        className="flex-1 flex items-center justify-center space-x-2 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold py-2 px-3 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition disabled:bg-slate-100 dark:disabled:bg-slate-700 disabled:text-slate-400 dark:disabled:text-slate-500"
-                                    >
-                                        <MaskIcon className="h-5 w-5" />
-                                        <span>{activeMaskB64 ? 'Edit Mask' : 'Create Mask'}</span>
-                                    </button>
-                                    {activeMaskB64 && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setActiveMaskB64(null)}
-                                            disabled={isLoading}
-                                            className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 transition"
-                                            aria-label="Clear mask"
-                                        >
-                                            <XIcon className="h-5 w-5" />
-                                        </button>
-                                    )}
-                                </div>
-                                {activeMaskB64 && <p className="text-xs text-green-700 dark:text-green-400 text-center flex items-center justify-center space-x-1"><CheckIcon className="h-3 w-3" /><span>Mask applied. Edits will target the selected area.</span></p>}
-                            </div>
-                            <button
-                                type="button"
-                                onClick={(e) => handleManualPreview(e as any)}
-                                className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed flex items-center justify-center space-x-2 shadow-lg"
-                                disabled={isLoading || !hasImage || !prompt}
-                            >
+                            <button type="button" onClick={(e) => handleManualPreview(e as any)} className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed flex items-center justify-center space-x-2 shadow-lg" disabled={isLoading || !hasImage || !prompt}>
                                 {isLoading ? <><LoaderIcon className="h-5 w-5" /><span>Generating Preview...</span></> : <><SparklesIcon className="h-5 w-5" /><span>Preview Edit</span></>}
                             </button>
                         </div>
                     )}
-
-                    <div className="space-y-3">
-                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 text-center">Or Try a Quick Effect</label>
-                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                            <QuickEffectButton effectPrompt={'Apply a vintage photo effect'}>Vintage</QuickEffectButton>
-                            <QuickEffectButton effectPrompt={'Add a vibrant neon glow to the edges'}>Neon Glow</QuickEffectButton>
-                            <QuickEffectButton effectPrompt={'Convert the image to a black and white pencil sketch'}>Sketch</QuickEffectButton>
-                            <QuickEffectButton effectPrompt={'Pixelate the image, giving it a retro 8-bit look'}>Pixelate</QuickEffectButton>
-                            <QuickEffectButton effectPrompt={'Convert the image into a pop art style, like Andy Warhol'}>Pop Art</QuickEffectButton>
-                            <QuickEffectButton effectPrompt={'Transform the photo into a watercolor painting'}>Watercolor</QuickEffectButton>
-                        </div>
-                        <QuickEffectButton effectPrompt={'Remove the background'}>Remove Background</QuickEffectButton>
-                    </div>
                     
                     <div className="space-y-4">
-                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 text-center">3. History</label>
-                        <div className="flex justify-center items-center space-x-2">
+                        <div className="flex justify-center items-center space-x-2 pt-4 border-t dark:border-slate-700">
                             <button onClick={handleUndo} disabled={!canUndo || isLoading || !!previewImageB64} className="flex items-center space-x-2 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 disabled:bg-slate-100 dark:disabled:bg-slate-700 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed transition">
                                 <UndoIcon className="h-5 w-5" />
                                 <span>Undo</span>
                             </button>
                             <div className="w-28 text-center">
-                                {hasImage && (
-                                    <span className="text-sm font-medium text-slate-500 dark:text-slate-400 tabular-nums">
-                                        Step {historyIndex + 1} of {history.length}
-                                    </span>
-                                )}
+                                {hasImage && <span className="text-sm font-medium text-slate-500 dark:text-slate-400 tabular-nums">Step {historyIndex + 1} of {history.length}</span>}
                             </div>
                             <button onClick={handleRedo} disabled={!canRedo || isLoading || !!previewImageB64} className="flex items-center space-x-2 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 disabled:bg-slate-100 dark:disabled:bg-slate-700 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed transition">
                                 <RedoIcon className="h-5 w-5" />
                                 <span>Redo</span>
                             </button>
                         </div>
-                        
-                        <div className="border-t dark:border-slate-700 pt-4 grid grid-cols-2 gap-4">
-                             <button
-                                onClick={handleCreateColoringPage}
-                                disabled={!hasImage || isLoading || !!previewImageB64 || isConverting}
-                                className="w-full flex items-center justify-center space-x-2 bg-teal-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-teal-700 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed transition shadow-md"
-                            >
+                         <div className="border-t dark:border-slate-700 pt-4 grid grid-cols-2 gap-4">
+                             <button onClick={handleCreateColoringPage} disabled={!hasImage || isLoading || !!previewImageB64 || isConverting} className="w-full flex items-center justify-center space-x-2 bg-teal-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-teal-700 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed transition shadow-md">
                                 {isConverting ? <><LoaderIcon className="h-5 w-5" /><span>Converting...</span></> : <><BrushIcon className="h-5 w-5" /><span>Create Coloring Page</span></>}
                             </button>
-                            <button
-                                onClick={() => {
-                                    if(currentImageB64 && mimeType) {
-                                        onSendToVideoGenerator({ b64: currentImageB64, mimeType })
-                                    }
-                                }}
-                                disabled={!hasImage || isLoading || !!previewImageB64}
-                                className="w-full flex items-center justify-center space-x-2 bg-purple-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-purple-700 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed transition shadow-md"
-                            >
+                            <button onClick={() => {if(currentImageB64 && mimeType) {onSendToVideoGenerator({ b64: currentImageB64, mimeType })}}} disabled={!hasImage || isLoading || !!previewImageB64} className="w-full flex items-center justify-center space-x-2 bg-purple-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-purple-700 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed transition shadow-md">
                                 <VideoIcon className="h-5 w-5" />
                                 <span>Animate this Image</span>
                             </button>

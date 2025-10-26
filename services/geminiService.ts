@@ -234,7 +234,8 @@ export const editImage = async (
   mimeType: string,
   prompt: string,
   maskB64?: string | null,
-  stickerB64?: string | null
+  stickerB64?: string | null,
+  characterB64?: string | null // NEW: For character consistency
 ): Promise<string> => {
   try {
     const parts: any[] = [
@@ -246,6 +247,16 @@ export const editImage = async (
       },
     ];
 
+    // NEW: Add character reference image if provided
+    if (characterB64) {
+      parts.push({
+        inlineData: {
+          data: characterB64,
+          mimeType: 'image/png', // Assume character images are PNG
+        },
+      });
+    }
+
     if (stickerB64) {
       parts.push({
         inlineData: {
@@ -255,8 +266,13 @@ export const editImage = async (
       });
     }
 
+    // NEW: Modify prompt if a character is being used
+    const finalPrompt = characterB64
+      ? `Please use the provided character reference image to ensure the character in your response is consistent. The user's request is: "${prompt}"`
+      : prompt;
+
     parts.push({
-      text: prompt,
+      text: finalPrompt,
     });
 
     if (maskB64) {

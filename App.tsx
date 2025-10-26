@@ -12,7 +12,7 @@ import { StickerMaker } from './components/StickerMaker';
 import { ProjectHub } from './components/ProjectHub';
 import { ProjectDetail } from './components/ProjectDetail';
 import { SunIcon, MoonIcon, SparklesIcon } from './components/icons';
-import type { AppFeature, Project, ProjectAsset } from './types';
+import type { AppFeature, Project, ProjectAsset, Character } from './types';
 import { dataURLtoFile } from './utils/helpers';
 
 const ThemeToggle: React.FC = () => {
@@ -72,6 +72,7 @@ export default function App() {
       description,
       lastModified: Date.now(),
       assets: [],
+      characterSheet: [], // Initialize character sheet
     };
     setProjects(prev => [newProject, ...prev]);
     setActiveProjectId(newProject.id);
@@ -101,6 +102,35 @@ export default function App() {
     setActiveFeature(null); // Return to project detail view after saving
   };
   
+  const handleAddCharacter = (characterData: Omit<Character, 'id'>) => {
+    if (!activeProjectId) return;
+    
+    const newCharacter: Character = {
+        id: Date.now().toString() + '_char',
+        ...characterData,
+    };
+
+    const newAsset: ProjectAsset = {
+        id: newCharacter.id, // Use same ID for consistency
+        type: 'character',
+        name: `Character: ${characterData.name}`,
+        data: characterData.imageB64,
+        prompt: characterData.prompt,
+    };
+
+    setProjects(prev => prev.map(p => {
+        if (p.id === activeProjectId) {
+            return {
+                ...p,
+                characterSheet: [...(p.characterSheet || []), newCharacter],
+                assets: [newAsset, ...p.assets],
+                lastModified: Date.now(),
+            };
+        }
+        return p;
+    }));
+  };
+
   const handleLaunchTool = (feature: AppFeature) => {
     if (activeProjectId) {
       setActiveFeature(feature);
@@ -132,7 +162,7 @@ export default function App() {
     if (activeProjectId && activeProject) {
         if (activeFeature) {
             switch (activeFeature) {
-                case 'imageEditor': return <ImageEditor project={activeProject} onSaveAsset={handleAddAsset} onBack={handleBackToProject} onSendToVideoGenerator={handleSendToVideoGenerator} incomingStickerB64={stickerToSendToEditor} />;
+                case 'imageEditor': return <ImageEditor project={activeProject} onSaveAsset={handleAddAsset} onBack={handleBackToProject} onSendToVideoGenerator={handleSendToVideoGenerator} incomingStickerB64={stickerToSendToEditor} onAddCharacter={handleAddCharacter} onConvertToColoringPage={() => {}} />;
                 case 'stickerMaker': return <StickerMaker onSendToEditor={handleSendStickerToEditor} />;
                 case 'videoGenerator': return <VideoGenerator initialImage={initialVideoGeneratorImage} />;
                 case 'liveChat': return <LiveChat />;
