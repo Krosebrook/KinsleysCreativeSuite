@@ -5,7 +5,7 @@ const Icon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
-    viewBox="0 0 24 24"
+    viewBox="0 0 24"
     fill="none"
     stroke="currentColor"
     strokeWidth="2"
@@ -261,5 +261,29 @@ export const StickerIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
         <path d="M15.5 2.5a2.5 2.5 0 0 0-3 0l-7 7a2.5 2.5 0 0 0 0 3.5l7 7a2.5 2.5 0 0 0 3.5 0l7-7a2.5 2.5 0 0 0 0-3.5Z" />
         <path d="m14 7 3 3" />
         <path d="M8.5 2.5 12 6" />
+    </Icon>
+);
+
+export const FolderKanbanIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <Icon {...props}>
+        <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-5.9a2 2 0 0 1-1.7-.9L8.1 4.1A2 2 0 0 0 6.4 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>
+        <path d="M8 10v4"/>
+        <path d="M12 10v2"/>
+        <path d="M16 10v6"/>
+    </Icon>
+);
+
+export const FolderPlusIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <Icon {...props}>
+        <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-5.9a2 2 0 0 1-1.7-.9L8.1 4.1A2 2 0 0 0 6.4 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>
+        <line x1="12" x2="12" y1="10" y2="16"/>
+        <line x1="9" x2="15" y1="13" y2="13"/>
+    </Icon>
+);
+
+export const ArrowLeftIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <Icon {...props}>
+        <path d="m12 19-7-7 7-7"/>
+        <path d="M19 12H5"/>
     </Icon>
 );

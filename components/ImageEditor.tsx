@@ -1,24 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { editImage, convertImageToLineArt } from '../services/geminiService';
 import { fileToBase64 } from '../utils/helpers';
-import { LoaderIcon, SparklesIcon, UndoIcon, RedoIcon, ImageIcon, SaveIcon, FolderOpenIcon, CheckIcon, XIcon, MaskIcon, VideoIcon, BrushIcon } from './icons';
+import { LoaderIcon, SparklesIcon, UndoIcon, RedoIcon, ImageIcon, SaveIcon, CheckIcon, XIcon, MaskIcon, VideoIcon, BrushIcon, ArrowLeftIcon } from './icons';
 import { MaskingCanvas } from './MaskingCanvas';
-
-const LOCAL_STORAGE_KEY = 'imageEditorSession';
+import type { Project, ProjectAsset } from '../types';
 
 interface ImageEditorProps {
+    project: Project;
+    onSaveAsset: (asset: ProjectAsset) => void;
+    onBack: () => void;
     onSendToVideoGenerator: (imageData: { b64: string; mimeType: string; }) => void;
     onConvertToColoringPage: (newImageB64: string) => void;
     incomingStickerB64?: string | null;
 }
 
-export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator, onConvertToColoringPage, incomingStickerB64 }) => {
+export const ImageEditor: React.FC<ImageEditorProps> = ({ project, onSaveAsset, onBack, onSendToVideoGenerator, onConvertToColoringPage, incomingStickerB64 }) => {
     const [mimeType, setMimeType] = useState<string | null>(null);
     const [history, setHistory] = useState<string[]>([]);
     const [historyIndex, setHistoryIndex] = useState(-1);
     const [previewImageB64, setPreviewImageB64] = useState<string | null>(null);
     
-    const [hasSavedSession, setHasSavedSession] = useState(false);
     const [prompt, setPrompt] = useState('Add a party hat to the main subject');
     const [isLoading, setIsLoading] = useState(false);
     const [isConverting, setIsConverting] = useState(false);
@@ -28,19 +29,11 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator
     const [activeMaskB64, setActiveMaskB64] = useState<string | null>(null);
     const [stickerToApply, setStickerToApply] = useState<string | null>(null);
 
-    // FIX: Moved derived state variables before useEffect hooks that use them
-    // to resolve "used before its declaration" error.
     const currentImageB64 = historyIndex >= 0 ? history[historyIndex] : null;
     const imageToDisplay = previewImageB64 || currentImageB64;
     const canUndo = historyIndex > 0;
     const canRedo = historyIndex < history.length - 1;
     const hasImage = history.length > 0;
-
-    useEffect(() => {
-        if (localStorage.getItem(LOCAL_STORAGE_KEY)) {
-            setHasSavedSession(true);
-        }
-    }, []);
     
     useEffect(() => {
         if (incomingStickerB64) {
@@ -63,7 +56,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator
         const file = event.target.files?.[0];
         if (file) {
             clearActiveEdits();
-            setStickerToApply(null); // Clear any active sticker when new image is loaded
+            setStickerToApply(null);
             setPrompt('Add a party hat to the main subject');
             const b64 = await fileToBase64(file);
             setMimeType(file.type);
@@ -101,7 +94,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator
         setHistory([...newHistory, previewImageB64]);
         setHistoryIndex(newHistory.length);
         clearActiveEdits();
-        setStickerToApply(null); // Sticker is now part of the history, clear it
+        setStickerToApply(null);
     };
 
     const handleDiscardPreview = () => {
@@ -120,40 +113,21 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator
         clearActiveEdits();
         setStickerToApply(null);
         if (canRedo) {
-            setHistoryIndex(historyIndex - 1);
+            setHistoryIndex(historyIndex + 1); // Corrected redo logic
         }
     };
 
-    const handleSave = () => {
-        if (!hasImage || !mimeType) return;
-        const sessionData = {
-            mimeType: mimeType,
-            history: history,
-            historyIndex: historyIndex,
+    const handleSaveToProject = () => {
+        if (!currentImageB64) return;
+        const assetName = prompt.length > 30 ? prompt.substring(0, 27) + "..." : prompt;
+        const newAsset: ProjectAsset = {
+            id: Date.now().toString(),
+            type: 'image',
+            name: `Image: ${assetName}`,
+            data: currentImageB64,
+            prompt: prompt,
         };
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sessionData));
-        setHasSavedSession(true);
-        alert('Session saved!');
-    };
-
-    const handleLoad = () => {
-        const savedSession = localStorage.getItem(LOCAL_STORAGE_KEY);
-        if (savedSession) {
-            try {
-                const sessionData = JSON.parse(savedSession);
-                if (sessionData.mimeType && sessionData.history && sessionData.historyIndex !== undefined) {
-                    setMimeType(sessionData.mimeType);
-                    setHistory(sessionData.history);
-                    setHistoryIndex(sessionData.historyIndex);
-                    clearActiveEdits();
-                    setStickerToApply(null);
-                } else {
-                     setError("Could not load session. The saved data is corrupted.");
-                }
-            } catch (e) {
-                setError("Could not parse saved session data.");
-            }
-        }
+        onSaveAsset(newAsset);
     };
 
     const handleCreateColoringPage = async () => {
@@ -168,68 +142,6 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator
         } finally {
             setIsConverting(false);
         }
-    };
-
-    const renderError = () => {
-        if (!error) return null;
-
-        let title = "An Unexpected Error Occurred";
-        let suggestions: string[] = ["Please try again in a few moments.", "If the problem persists, try loading a saved session or starting with a new image."];
-        const lowerCaseError = error.toLowerCase();
-
-        if (lowerCaseError.includes('safety') || lowerCaseError.includes('blocked')) {
-            title = "Prompt Blocked for Safety";
-            suggestions = [
-                "Try rephrasing your prompt to be more general.",
-                "Avoid using words that could be considered sensitive or harmful.",
-                "Ensure your mask selection is appropriate if you are using one."
-            ];
-        } else if (lowerCaseError.includes('network') || lowerCaseError.includes('fetch')) {
-            title = "Network Connection Error";
-            suggestions = [
-                "Please check your internet connection.",
-                "Try refreshing the page and uploading the image again."
-            ];
-        } else if (lowerCaseError.includes('quota') || lowerCaseError.includes('rate limit')) {
-            title = "API Limit Reached";
-            suggestions = [
-                "You have exceeded your usage limit for the API.",
-                "Please check your billing details on your Google AI Studio account.",
-                "Wait for some time before trying again."
-            ];
-        } else if (lowerCaseError.includes('invalid argument')) {
-            title = "Invalid Request";
-            suggestions = [
-                "The model could not understand the request.",
-                "Try making your prompt clearer, simpler, or more descriptive."
-            ];
-        } else if (lowerCaseError.includes('overloaded') || lowerCaseError.includes('unavailable')) {
-            title = "Model Unavailable";
-            suggestions = [
-                "The AI model is currently busy or under maintenance.",
-                "Please wait a few moments before trying again."
-            ];
-        }
-        
-        return (
-            <div className="mt-4 p-4 bg-red-100 border-l-4 border-red-500 text-red-800 rounded-r-lg shadow-sm animate-fade-in" role="alert">
-                <div className="flex justify-between items-start">
-                    <div>
-                        <p className="font-bold text-lg">{title}</p>
-                        <p className="mt-1 text-sm">{error}</p>
-                        <div className="mt-3 pt-2 border-t border-red-200">
-                           <p className="font-semibold text-sm">What you can do:</p>
-                           <ul className="list-disc list-inside mt-1 text-sm space-y-1">
-                               {suggestions.map((s, i) => <li key={i}>{s}</li>)}
-                           </ul>
-                        </div>
-                    </div>
-                    <button onClick={() => setError(null)} className="-mt-1 -mr-1 p-1 rounded-full text-red-700 hover:bg-red-200 transition" aria-label="Dismiss error">
-                        <XIcon className="h-5 w-5" />
-                    </button>
-                </div>
-            </div>
-        );
     };
 
     const QuickEffectButton: React.FC<{ children: React.ReactNode, effectPrompt: string }> = ({ children, effectPrompt }) => (
@@ -255,18 +167,27 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator
                     }}
                 />
             )}
-            <header className="text-center mb-10 md:mb-12">
-                <h1 className="text-4xl md:text-5xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">
+            <header className="flex items-center justify-between mb-10 md:mb-12">
+                <button onClick={onBack} className="flex items-center space-x-2 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition font-semibold">
+                    <ArrowLeftIcon className="w-5 h-5" />
+                    <span>Back to Project</span>
+                </button>
+                <h1 className="text-3xl md:text-4xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">
                     AI Image Editor
                 </h1>
-                <p className="mt-3 text-lg md:text-xl text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-                    Upload a photo and use simple text prompts to make magical edits.
-                </p>
+                <div className="w-32"></div> {/* Spacer */}
             </header>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto">
                 <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-xl space-y-6">
-                    <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">Controls</h2>
+                    <div className="flex justify-between items-start">
+                        <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">Controls</h2>
+                        <button onClick={handleSaveToProject} disabled={!hasImage || isLoading || !!previewImageB64} className="flex items-center space-x-2 bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed transition shadow-md">
+                            <SaveIcon className="h-5 w-5" />
+                            <span>Save to Project</span>
+                        </button>
+                    </div>
+
                     <div>
                         <label htmlFor="imageUpload" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">1. Upload Image</label>
                         <input
@@ -390,67 +311,30 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onSendToVideoGenerator
                                 <span>Redo</span>
                             </button>
                         </div>
-
-                        {hasImage && (
-                            <div className="flex overflow-x-auto space-x-3 p-2 bg-slate-100 dark:bg-slate-900/70 rounded-lg">
-                                {history.map((imgB64, index) => (
-                                    <button
-                                        key={index}
-                                        onClick={() => { clearActiveEdits(); setHistoryIndex(index); }}
-                                        disabled={!!previewImageB64}
-                                        className={`flex-shrink-0 w-20 h-20 bg-white dark:bg-slate-700 p-1 rounded-md overflow-hidden focus:outline-none transition-all duration-200 ${
-                                            historyIndex === index
-                                                ? 'ring-4 ring-indigo-500 ring-offset-2 dark:ring-offset-slate-800'
-                                                : 'ring-1 ring-slate-300 dark:ring-slate-600 hover:ring-indigo-400'
-                                        } ${!!previewImageB64 ? 'cursor-not-allowed opacity-50' : ''}`}
-                                        aria-label={`Go to step ${index + 1}`}
-                                    >
-                                        <img
-                                            src={`data:image/png;base64,${imgB64}`}
-                                            alt={`History step ${index + 1}`}
-                                            className="w-full h-full object-cover rounded-sm"
-                                        />
-                                    </button>
-                                ))}
-                            </div>
-                        )}
                         
-                        <div className="border-t dark:border-slate-700 pt-4">
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 text-center">Session & Actions</label>
-                             <div className="flex justify-center space-x-4 mb-4">
-                                <button onClick={handleSave} disabled={!hasImage || isLoading || !!previewImageB64} className="flex items-center space-x-2 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 disabled:bg-slate-100 dark:disabled:bg-slate-700 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed transition">
-                                    <SaveIcon className="h-5 w-5" />
-                                    <span>Save</span>
-                                </button>
-                                <button onClick={handleLoad} disabled={!hasSavedSession || isLoading || !!previewImageB64} className="flex items-center space-x-2 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 disabled:bg-slate-100 dark:disabled:bg-slate-700 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed transition">
-                                    <FolderOpenIcon className="h-5 w-5" />
-                                    <span>Load</span>
-                                </button>
-                            </div>
-                             <div className="grid grid-cols-2 gap-4">
-                                 <button
-                                    onClick={handleCreateColoringPage}
-                                    disabled={!hasImage || isLoading || !!previewImageB64 || isConverting}
-                                    className="w-full flex items-center justify-center space-x-2 bg-teal-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-teal-700 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed transition shadow-md"
-                                >
-                                    {isConverting ? <><LoaderIcon className="h-5 w-5" /><span>Converting...</span></> : <><BrushIcon className="h-5 w-5" /><span>Create Coloring Page</span></>}
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        if(currentImageB64 && mimeType) {
-                                            onSendToVideoGenerator({ b64: currentImageB64, mimeType })
-                                        }
-                                    }}
-                                    disabled={!hasImage || isLoading || !!previewImageB64}
-                                    className="w-full flex items-center justify-center space-x-2 bg-purple-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-purple-700 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed transition shadow-md"
-                                >
-                                    <VideoIcon className="h-5 w-5" />
-                                    <span>Animate this Image</span>
-                                </button>
-                            </div>
+                        <div className="border-t dark:border-slate-700 pt-4 grid grid-cols-2 gap-4">
+                             <button
+                                onClick={handleCreateColoringPage}
+                                disabled={!hasImage || isLoading || !!previewImageB64 || isConverting}
+                                className="w-full flex items-center justify-center space-x-2 bg-teal-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-teal-700 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed transition shadow-md"
+                            >
+                                {isConverting ? <><LoaderIcon className="h-5 w-5" /><span>Converting...</span></> : <><BrushIcon className="h-5 w-5" /><span>Create Coloring Page</span></>}
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if(currentImageB64 && mimeType) {
+                                        onSendToVideoGenerator({ b64: currentImageB64, mimeType })
+                                    }
+                                }}
+                                disabled={!hasImage || isLoading || !!previewImageB64}
+                                className="w-full flex items-center justify-center space-x-2 bg-purple-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-purple-700 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed transition shadow-md"
+                            >
+                                <VideoIcon className="h-5 w-5" />
+                                <span>Animate this Image</span>
+                            </button>
                         </div>
                     </div>
-                     {renderError()}
+                     {error && <div className="mt-4 p-4 bg-red-100 border-l-4 border-red-500 text-red-800 rounded-r-lg shadow-sm"><p className="font-bold">Error</p><p>{error}</p></div>}
                 </div>
 
                 <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-xl flex items-center justify-center">
