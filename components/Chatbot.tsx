@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { Message } from '../types';
-import { BotIcon, LoaderIcon, MessageSquareIcon, SendIcon, SparklesIcon, XIcon, PaperclipIcon } from './icons';
+import { BotIcon, LoaderIcon, MessageSquareIcon, SendIcon, SparklesIcon, XIcon, PaperclipIcon, UserIcon, CheckIcon } from './icons';
 import { sendMessageToModel } from '../services/geminiService';
 import { useProjects } from '../contexts/ProjectContext';
 import { fileToBase64 } from '../utils/helpers';
@@ -8,13 +8,14 @@ import { fileToBase64 } from '../utils/helpers';
 export const Chatbot: React.FC = () => {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<Message[]>([
-        { role: 'model', text: 'Hello! How can I help? You can ask about your project or upload an image.' }
+        { role: 'model', text: 'Hello! How can I help? You can ask about your project or upload an image.', timestamp: Date.now() }
     ]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [useGrounded, setUseGrounded] = useState(false);
     
     const [imageToSend, setImageToSend] = useState<{ b64: string; mimeType: string; url: string } | null>(null);
+    const [copiedTimestamp, setCopiedTimestamp] = useState<number | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -46,13 +47,28 @@ export const Chatbot: React.FC = () => {
         }
     };
 
+    const handleCopyMessage = (textToCopy: string, timestamp: number) => {
+        if (!textToCopy) return; // Don't attempt to copy empty or image-only messages
+        navigator.clipboard.writeText(textToCopy)
+            .then(() => {
+                setCopiedTimestamp(timestamp);
+                setTimeout(() => {
+                    setCopiedTimestamp(null);
+                }, 2000); // Display feedback for 2 seconds
+            })
+            .catch(err => {
+                console.error('Failed to copy message: ', err);
+            });
+    };
+
     const handleSend = async () => {
         if ((input.trim() === '' && !imageToSend) || isLoading) return;
 
         const userMessage: Message = { 
             role: 'user', 
             text: input,
-            ...(imageToSend && { imageB64: imageToSend.b64, mimeType: imageToSend.mimeType })
+            ...(imageToSend && { imageB64: imageToSend.b64, mimeType: imageToSend.mimeType }),
+            timestamp: Date.now()
         };
         
         // Use a functional update to get the latest messages state for the API call
@@ -75,7 +91,7 @@ export const Chatbot: React.FC = () => {
                 currentImage ? { b64: currentImage.b64, mimeType: currentImage.mimeType } : null,
                 useGrounded
             );
-            setMessages(prev => [...prev, modelMessage]);
+            setMessages(prev => [...prev, { ...modelMessage, timestamp: Date.now() }]);
         } catch (err) {
             let userFriendlyMessage = 'An unexpected error occurred during the chat. Please try again.';
 
@@ -83,7 +99,7 @@ export const Chatbot: React.FC = () => {
                 userFriendlyMessage = `An error occurred: ${err.message}`;
             }
             
-            const errorMessage: Message = { role: 'model', text: userFriendlyMessage };
+            const errorMessage: Message = { role: 'model', text: userFriendlyMessage, timestamp: Date.now() };
             setMessages(prev => [...prev, errorMessage]);
         } finally {
             setIsLoading(false);
@@ -123,31 +139,56 @@ export const Chatbot: React.FC = () => {
             
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {messages.map((msg, index) => (
-                    <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[80%] p-3 rounded-2xl shadow-sm ${msg.role === 'user' ? 'bg-indigo-500 text-white rounded-br-none' : 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-bl-none'}`}>
-                            {msg.imageB64 && msg.mimeType && (
-                                <img src={`data:${msg.mimeType};base64,${msg.imageB64}`} alt="User upload" className="mb-2 rounded-lg max-w-full h-auto" />
+                    <div key={index} className={`flex items-start gap-3 ${msg.role === 'user' ? 'justify-end flex-row-reverse' : 'justify-start'}`}>
+                         <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-1 ${msg.role === 'user' ? 'bg-indigo-500' : 'bg-slate-200 dark:bg-slate-600'}`}>
+                            {msg.role === 'user' ? (
+                                <UserIcon className="w-5 h-5 text-white" />
+                            ) : (
+                                <BotIcon className="w-5 h-5 text-slate-500 dark:text-slate-400" />
                             )}
-                            {msg.text && <p className="text-sm leading-relaxed">{msg.text}</p>}
-                            {msg.sources && msg.sources.length > 0 && (
-                                <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-600">
-                                    <h4 className="text-xs font-semibold mb-1 text-slate-500 dark:text-slate-400">Sources:</h4>
-                                    <ul className="space-y-1">
-                                        {msg.sources.map((source, i) => (
-                                            <li key={i}>
-                                                <a href={source.uri} target="_blank" rel="noopener noreferrer" className="text-xs text-indigo-400 dark:text-indigo-300 hover:underline truncate block">
-                                                    {i+1}. {source.title}
-                                                </a>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
+                        </div>
+                        <div className={`max-w-[80%] flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                            <div 
+                                className={`relative p-3 rounded-2xl shadow-sm cursor-pointer transition-shadow hover:shadow-lg ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-gray-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-bl-none'}`}
+                                onClick={() => handleCopyMessage(msg.text, msg.timestamp)}
+                                title="Click to copy message"
+                            >
+                                {copiedTimestamp === msg.timestamp && (
+                                    <div className="absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center rounded-2xl animate-fade-in">
+                                        <CheckIcon className="w-5 h-5 text-white" />
+                                        <span className="ml-1 text-white font-bold text-sm">Copied!</span>
+                                    </div>
+                                )}
+                                {msg.imageB64 && msg.mimeType && (
+                                    <img src={`data:${msg.mimeType};base64,${msg.imageB64}`} alt="User upload" className="mb-2 rounded-lg max-w-full h-auto" />
+                                )}
+                                {msg.text && <p className="text-sm leading-relaxed">{msg.text}</p>}
+                                {msg.sources && msg.sources.length > 0 && (
+                                    <div className={`mt-2 pt-2 border-t ${msg.role === 'user' ? 'border-indigo-300/50' : 'border-slate-200 dark:border-slate-600'}`}>
+                                        <h4 className={`text-xs font-semibold mb-1 ${msg.role === 'user' ? 'text-indigo-100' : 'text-slate-500 dark:text-slate-400'}`}>Sources:</h4>
+                                        <ul className="space-y-1">
+                                            {msg.sources.map((source, i) => (
+                                                <li key={i}>
+                                                    <a href={source.uri} target="_blank" rel="noopener noreferrer" className={`text-xs hover:underline truncate block ${msg.role === 'user' ? 'text-indigo-200' : 'text-indigo-400 dark:text-indigo-300'}`}>
+                                                        {i+1}. {source.title}
+                                                    </a>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                             <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 px-1">
+                                {new Date(msg.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                            </p>
                         </div>
                     </div>
                 ))}
                 {isLoading && (
-                     <div className="flex justify-start">
+                     <div className="flex justify-start items-start gap-3">
+                        <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-1 bg-slate-200 dark:bg-slate-600">
+                             <BotIcon className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+                        </div>
                         <div className="max-w-[80%] p-3 rounded-2xl bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-bl-none flex items-center space-x-2 shadow-sm">
                             <LoaderIcon className="h-5 w-5 text-slate-400"/>
                             <span className="text-sm text-slate-500 dark:text-slate-400">Thinking...</span>

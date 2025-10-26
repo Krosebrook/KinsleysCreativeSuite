@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { editImage, convertImageToLineArt } from '../services/geminiService';
 import { fileToBase64 } from '../utils/helpers';
-import { LoaderIcon, SparklesIcon, UndoIcon, RedoIcon, ImageIcon, SaveIcon, CheckIcon, XIcon, MaskIcon, VideoIcon, BrushIcon, ArrowLeftIcon, UserIcon, PaletteIcon } from './icons';
+import { LoaderIcon, SparklesIcon, UndoIcon, RedoIcon, ImageIcon, SaveIcon, CheckIcon, XIcon, MaskIcon, VideoIcon, BrushIcon, ArrowLeftIcon, UserIcon, PaletteIcon, LayersIcon, TrashIcon } from './icons';
 import { MaskingCanvas } from './MaskingCanvas';
-import type { ProjectAsset, Character } from '../types';
+import type { ProjectAsset, Character, Layer } from '../types';
 import { useProjects } from '../contexts/ProjectContext';
 import { AddCharacterModal } from './modals/AddCharacterModal';
 import { AddStyleModal } from './modals/AddStyleModal';
@@ -19,7 +19,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onBack, onSendToVideoG
     const { activeProject, addAsset, addCharacter, addStyle } = useProjects();
     
     const [mimeType, setMimeType] = useState<string | null>(null);
-    const [history, setHistory] = useState<string[]>([]);
+    const [history, setHistory] = useState<Layer[]>([]);
     const [historyIndex, setHistoryIndex] = useState(-1);
     const [previewImageB64, setPreviewImageB64] = useState<string | null>(null);
     
@@ -37,7 +37,8 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onBack, onSendToVideoG
     const [isAddCharacterModalOpen, setIsAddCharacterModalOpen] = useState(false);
     const [isAddStyleModalOpen, setIsAddStyleModalOpen] = useState(false);
 
-    const currentImageB64 = historyIndex >= 0 ? history[historyIndex] : null;
+    const currentLayer = history[historyIndex];
+    const currentImageB64 = currentLayer?.imageB64;
     const imageToDisplay = previewImageB64 || currentImageB64;
     const canUndo = historyIndex > 0;
     const canRedo = historyIndex < history.length - 1;
@@ -71,7 +72,12 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onBack, onSendToVideoG
             setPrompt('Add a party hat to the main subject');
             const b64 = await fileToBase64(file);
             setMimeType(file.type);
-            setHistory([b64]);
+            const baseLayer: Layer = {
+                id: Date.now().toString(),
+                name: 'Base Image',
+                imageB64: b64,
+            };
+            setHistory([baseLayer]);
             setHistoryIndex(0);
         }
     };
@@ -101,8 +107,13 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onBack, onSendToVideoG
 
     const handleConfirmEdit = () => {
         if (!previewImageB64) return;
+        const newLayer: Layer = {
+            id: Date.now().toString(),
+            name: prompt,
+            imageB64: previewImageB64,
+        };
         const newHistory = history.slice(0, historyIndex + 1);
-        setHistory([...newHistory, previewImageB64]);
+        setHistory([...newHistory, newLayer]);
         setHistoryIndex(newHistory.length);
         clearActiveEdits();
         setStickerToApply(null);
@@ -128,18 +139,39 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onBack, onSendToVideoG
         }
     };
 
+    const handleSelectLayer = (indexToSelect: number) => {
+        if (previewImageB64) handleDiscardPreview();
+        setHistoryIndex(indexToSelect);
+    };
+    
+    const handleDeleteLayer = (indexToDelete: number) => {
+        if (previewImageB64) handleDiscardPreview();
+    
+        if (indexToDelete === 0) {
+            // Reset everything if the base layer is deleted
+            setHistory([]);
+            setHistoryIndex(-1);
+            setMimeType(null);
+        } else if (indexToDelete > 0) {
+            // Remove the target layer and all subsequent layers
+            const newHistory = history.slice(0, indexToDelete);
+            setHistory(newHistory);
+            setHistoryIndex(newHistory.length - 1);
+        }
+    };
+
     const handleSaveToProject = () => {
-        if (!currentImageB64) return;
-        const assetName = prompt.length > 30 ? prompt.substring(0, 27) + "..." : prompt;
+        if (!currentImageB64 || !currentLayer) return;
+        const assetName = currentLayer.name.length > 30 ? currentLayer.name.substring(0, 27) + "..." : currentLayer.name;
         const newAsset: ProjectAsset = {
             id: Date.now().toString(),
             type: 'image',
             name: `Image: ${assetName}`,
             data: currentImageB64,
-            prompt: prompt,
+            prompt: currentLayer.name,
         };
         addAsset(newAsset);
-        onBack(); // Go back to project view after saving
+        onBack();
     };
 
     const handleCreateColoringPage = async () => {
@@ -257,6 +289,41 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onBack, onSendToVideoG
                             <button type="button" onClick={(e) => handleManualPreview(e as any)} className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed flex items-center justify-center space-x-2 shadow-lg" disabled={isLoading || !hasImage || !prompt}>
                                 {isLoading ? <><LoaderIcon className="h-5 w-5" /><span>Generating Preview...</span></> : <><SparklesIcon className="h-5 w-5" /><span>Preview Edit</span></>}
                             </button>
+                        </div>
+                    )}
+
+                    {hasImage && (
+                        <div className="space-y-4 pt-4 border-t dark:border-slate-700">
+                            <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300 flex items-center space-x-2">
+                                <LayersIcon className="w-5 h-5" />
+                                <span>Layers</span>
+                            </h3>
+                            <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                                {history.slice().reverse().map((layer, index) => {
+                                    const reversedIndex = history.length - 1 - index;
+                                    return (
+                                        <div 
+                                            key={layer.id} 
+                                            onClick={() => handleSelectLayer(reversedIndex)}
+                                            className={`p-2 rounded-lg flex items-center justify-between cursor-pointer transition ${historyIndex === reversedIndex ? 'bg-indigo-100 dark:bg-indigo-900/50 ring-2 ring-indigo-500' : 'bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600'}`}
+                                        >
+                                            <div className="flex items-center space-x-2 overflow-hidden">
+                                                <img src={`data:image/png;base64,${layer.imageB64}`} alt={layer.name} className="w-10 h-10 object-cover rounded-md flex-shrink-0" />
+                                                <span className="text-sm font-medium truncate">{layer.name}</span>
+                                            </div>
+                                            {reversedIndex > 0 && (
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); handleDeleteLayer(reversedIndex); }}
+                                                    className="p-1.5 rounded-full text-slate-500 hover:bg-red-200 hover:text-red-700 dark:hover:bg-red-900/50 dark:hover:text-red-400 flex-shrink-0"
+                                                    aria-label="Delete layer and subsequent layers"
+                                                >
+                                                    <TrashIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    )
+                                })}
+                            </div>
                         </div>
                     )}
                     

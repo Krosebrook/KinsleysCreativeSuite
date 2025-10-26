@@ -132,6 +132,8 @@ export const sendMessageToModel = async (
             role: 'model',
             text: response.text,
             sources: sources,
+            // FIX: Added missing 'timestamp' property to conform to the Message type.
+            timestamp: Date.now(),
         };
 
     } catch (error) {

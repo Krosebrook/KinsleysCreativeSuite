@@ -6,6 +6,7 @@ export interface Message {
   sources?: { uri: string; title: string }[];
   imageB64?: string;
   mimeType?: string;
+  timestamp: number;
 }
 
 export type AppFeature = 'projectHub' | 'coloringBook' | 'imageEditor' | 'videoGenerator' | 'liveChat' | 'storyBooster' | 'stickerMaker' | 'storyboardGenerator';
@@ -30,6 +31,13 @@ export interface Character {
   name: string;
   imageB64: string;
   prompt: string;
+}
+
+// NEW: Layer type for Image Editor
+export interface Layer {
+  id: string;
+  name: string;
+  imageB64: string;
 }
 
 // NEW: Project Hub types
