@@ -1,5 +1,5 @@
 import { GoogleGenAI, Chat, Modality, Type } from "@google/genai";
-import type { Message } from "../types";
+import type { Message, StoryboardScene } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
@@ -162,6 +162,44 @@ export const generateStoryIdea = async (prompt: string, genre: string): Promise<
     }
 };
 
+
+// NEW: Storyboard function
+export const generateStoryboardPrompts = async (storyText: string): Promise<StoryboardScene[]> => {
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-pro',
+            contents: `Analyze the following story and break it down into 4 key visual scenes for a storyboard. For each scene, provide a short description, a detailed image prompt for an AI image generator, and a list of character names mentioned in that scene. Story: "${storyText}"`,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        scenes: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    scene_description: { type: Type.STRING },
+                                    image_prompt: { type: Type.STRING },
+                                    characters_mentioned: {
+                                        type: Type.ARRAY,
+                                        items: { type: Type.STRING }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        const jsonResponse = JSON.parse(response.text.trim());
+        return jsonResponse.scenes || [];
+    } catch (error) {
+        throw handleApiError(error, 'Storyboard Prompt Generation');
+    }
+};
+
 // --- Image Generation/Editing Functions ---
 
 const generateColoringPage = async (prompt: string): Promise<string> => {
@@ -229,69 +267,95 @@ export const generateSticker = async (prompt: string): Promise<string> => {
     }
 };
 
+// For Storyboard - generates a new image from a prompt + optional references
+export const generateStoryImage = async (
+  prompt: string,
+  characterB64s?: (string | null)[],
+  styleB64?: string | null
+): Promise<string> => {
+  try {
+    const parts: any[] = [];
+
+    if (characterB64s) {
+      for (const charB64 of characterB64s) {
+        if (charB64) {
+          parts.push({
+            inlineData: { data: charB64, mimeType: 'image/png' },
+          });
+        }
+      }
+    }
+    
+    if (styleB64) {
+      parts.push({
+        inlineData: { data: styleB64, mimeType: 'image/png' },
+      });
+    }
+
+    parts.push({ text: prompt });
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: { parts: parts },
+      config: { responseModalities: [Modality.IMAGE] },
+    });
+
+    for (const part of response.candidates[0].content.parts) {
+      if (part.inlineData) {
+        return part.inlineData.data;
+      }
+    }
+    throw new Error("No image was returned from the model.");
+  } catch (error) {
+    throw handleApiError(error, 'Story Image Generation');
+  }
+};
+
+
 export const editImage = async (
   base64ImageData: string,
   mimeType: string,
   prompt: string,
   maskB64?: string | null,
   stickerB64?: string | null,
-  characterB64?: string | null // NEW: For character consistency
+  characterB64?: string | null,
+  styleB64?: string | null
 ): Promise<string> => {
   try {
-    const parts: any[] = [
-      {
-        inlineData: {
-          data: base64ImageData,
-          mimeType: mimeType,
-        },
-      },
-    ];
+    const parts: any[] = [{
+      inlineData: { data: base64ImageData, mimeType: mimeType },
+    }];
 
-    // NEW: Add character reference image if provided
     if (characterB64) {
       parts.push({
-        inlineData: {
-          data: characterB64,
-          mimeType: 'image/png', // Assume character images are PNG
-        },
+        inlineData: { data: characterB64, mimeType: 'image/png' },
+      });
+    }
+    
+    if (styleB64) {
+      parts.push({
+        inlineData: { data: styleB64, mimeType: 'image/png' },
       });
     }
 
     if (stickerB64) {
       parts.push({
-        inlineData: {
-          data: stickerB64,
-          mimeType: 'image/png', // Stickers are always PNGs with transparency
-        },
+        inlineData: { data: stickerB64, mimeType: 'image/png' },
       });
     }
 
-    // NEW: Modify prompt if a character is being used
-    const finalPrompt = characterB64
-      ? `Please use the provided character reference image to ensure the character in your response is consistent. The user's request is: "${prompt}"`
-      : prompt;
-
-    parts.push({
-      text: finalPrompt,
-    });
+    parts.push({ text: prompt });
 
     if (maskB64) {
       parts.push({
-        inlineData: {
-          data: maskB64,
-          mimeType: 'image/png',
-        },
+        inlineData: { data: maskB64, mimeType: 'image/png' },
       });
     }
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
-      contents: {
-        parts: parts,
-      },
-      config: {
-        responseModalities: [Modality.IMAGE],
-      },
+      contents: { parts: parts },
+      config: { responseModalities: [Modality.IMAGE] },
     });
 
     for (const part of response.candidates[0].content.parts) {

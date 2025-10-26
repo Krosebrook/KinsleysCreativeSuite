@@ -1,6 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { createChat } from './services/geminiService';
-import { loadProjects, saveProjects } from './services/projectService';
 import { Chatbot } from './components/Chatbot';
 import type { Chat } from '@google/genai';
 import { ColoringBookGenerator } from './components/ColoringBookGenerator';
@@ -11,14 +10,16 @@ import { StoryBooster } from './components/StoryBooster';
 import { StickerMaker } from './components/StickerMaker';
 import { ProjectHub } from './components/ProjectHub';
 import { ProjectDetail } from './components/ProjectDetail';
+import { StoryboardGenerator } from './components/StoryboardGenerator';
 import { SunIcon, MoonIcon, SparklesIcon } from './components/icons';
-import type { AppFeature, Project, ProjectAsset, Character } from './types';
+import type { AppFeature } from './types';
 import { dataURLtoFile } from './utils/helpers';
+import { ProjectProvider, useProjects } from './contexts/ProjectContext';
 
 const ThemeToggle: React.FC = () => {
     const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
 
-    useEffect(() => {
+    React.useEffect(() => {
         if (theme === 'dark') {
             document.documentElement.classList.add('dark');
             localStorage.setItem('theme', 'dark');
@@ -43,96 +44,27 @@ const ThemeToggle: React.FC = () => {
     );
 };
 
-export default function App() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+const AppContent: React.FC = () => {
+  const { activeProjectId, activeProject, setActiveProjectId } = useProjects();
   const [activeFeature, setActiveFeature] = useState<AppFeature | null>(null);
 
+  // State for passing data between tools
   const [initialVideoGeneratorImage, setInitialVideoGeneratorImage] = useState<{b64: string, file: File} | null>(null);
   const [stickerToSendToEditor, setStickerToSendToEditor] = useState<string | null>(null);
+  const [initialColoringPageImage, setInitialColoringPageImage] = useState<string | null>(null);
+  const [initialColoringBookPrompt, setInitialColoringBookPrompt] = useState<string | null>(null);
+  const [initialStoryForStoryboard, setInitialStoryForStoryboard] = useState<string | null>(null);
   
   const chatInstance = useMemo<Chat>(() => createChat(), []);
-
-  useEffect(() => {
-    setProjects(loadProjects());
-  }, []);
-
-  useEffect(() => {
-    saveProjects(projects);
-  }, [projects]);
   
-  const activeProject = useMemo(() => {
-    return projects.find(p => p.id === activeProjectId) || null;
-  }, [projects, activeProjectId]);
-
-  const handleCreateProject = (name: string, description: string) => {
-    const newProject: Project = {
-      id: Date.now().toString(),
-      name,
-      description,
-      lastModified: Date.now(),
-      assets: [],
-      characterSheet: [], // Initialize character sheet
-    };
-    setProjects(prev => [newProject, ...prev]);
-    setActiveProjectId(newProject.id);
-  };
-
-  const handleDeleteProject = (projectId: string) => {
-    if (window.confirm('Are you sure you want to delete this project and all its assets? This cannot be undone.')) {
-        setProjects(prev => prev.filter(p => p.id !== projectId));
-        if (activeProjectId === projectId) {
-            setActiveProjectId(null);
-        }
-    }
-  };
-
-  const handleAddAsset = (asset: ProjectAsset) => {
-    if (!activeProjectId) return;
-    setProjects(prev => prev.map(p => {
-        if (p.id === activeProjectId) {
-            return { 
-                ...p, 
-                assets: [asset, ...p.assets],
-                lastModified: Date.now(),
-            };
-        }
-        return p;
-    }));
-    setActiveFeature(null); // Return to project detail view after saving
-  };
-  
-  const handleAddCharacter = (characterData: Omit<Character, 'id'>) => {
-    if (!activeProjectId) return;
-    
-    const newCharacter: Character = {
-        id: Date.now().toString() + '_char',
-        ...characterData,
-    };
-
-    const newAsset: ProjectAsset = {
-        id: newCharacter.id, // Use same ID for consistency
-        type: 'character',
-        name: `Character: ${characterData.name}`,
-        data: characterData.imageB64,
-        prompt: characterData.prompt,
-    };
-
-    setProjects(prev => prev.map(p => {
-        if (p.id === activeProjectId) {
-            return {
-                ...p,
-                characterSheet: [...(p.characterSheet || []), newCharacter],
-                assets: [newAsset, ...p.assets],
-                lastModified: Date.now(),
-            };
-        }
-        return p;
-    }));
-  };
-
   const handleLaunchTool = (feature: AppFeature) => {
     if (activeProjectId) {
+      // Clear any stale initial data when launching a tool
+      setInitialVideoGeneratorImage(null);
+      setStickerToSendToEditor(null);
+      setInitialColoringPageImage(null);
+      setInitialColoringBookPrompt(null);
+      setInitialStoryForStoryboard(null);
       setActiveFeature(feature);
     }
   };
@@ -144,10 +76,16 @@ export default function App() {
   
   const handleBackToProject = () => {
     setActiveFeature(null);
+    // Clear initial data when returning to project view
+    setInitialVideoGeneratorImage(null);
+    setStickerToSendToEditor(null);
+    setInitialColoringPageImage(null);
+    setInitialColoringBookPrompt(null);
+    setInitialStoryForStoryboard(null);
   };
 
-  // Handlers for cross-feature actions from within a project context
-   const handleSendToVideoGenerator = (imageData: { b64: string; mimeType: string }) => {
+  // Handlers for cross-feature actions
+  const handleSendToVideoGenerator = (imageData: { b64: string; mimeType: string }) => {
     const file = dataURLtoFile(`data:${imageData.mimeType};base64,${imageData.b64}`, 'edited-image.png');
     setInitialVideoGeneratorImage({ b64: imageData.b64, file });
     setActiveFeature('videoGenerator');
@@ -158,23 +96,38 @@ export default function App() {
     setActiveFeature('imageEditor');
   };
 
+  const handleConvertToColoringPage = (newImageB64: string) => {
+    setInitialColoringPageImage(newImageB64);
+    setActiveFeature('coloringBook');
+  };
+
+  const handleGenerateColoringPagesFromStory = (storyText: string) => {
+    setInitialColoringBookPrompt(storyText);
+    setActiveFeature('coloringBook');
+  };
+
+  const handleCreateStoryboardFromStory = (storyText: string) => {
+    setInitialStoryForStoryboard(storyText);
+    setActiveFeature('storyboardGenerator');
+  };
+
   const renderContent = () => {
     if (activeProjectId && activeProject) {
         if (activeFeature) {
             switch (activeFeature) {
-                case 'imageEditor': return <ImageEditor project={activeProject} onSaveAsset={handleAddAsset} onBack={handleBackToProject} onSendToVideoGenerator={handleSendToVideoGenerator} incomingStickerB64={stickerToSendToEditor} onAddCharacter={handleAddCharacter} onConvertToColoringPage={() => {}} />;
+                case 'imageEditor': return <ImageEditor onBack={handleBackToProject} onSendToVideoGenerator={handleSendToVideoGenerator} incomingStickerB64={stickerToSendToEditor} onConvertToColoringPage={handleConvertToColoringPage} />;
                 case 'stickerMaker': return <StickerMaker onSendToEditor={handleSendStickerToEditor} />;
                 case 'videoGenerator': return <VideoGenerator initialImage={initialVideoGeneratorImage} />;
                 case 'liveChat': return <LiveChat />;
-                case 'storyBooster': return <StoryBooster onGenerateColoringPages={() => {}} />;
-                case 'coloringBook': return <ColoringBookGenerator />;
-                // default case can show project detail or a message
-                default: return <ProjectDetail project={activeProject} onLaunchTool={handleLaunchTool} onBackToHub={handleBackToHub} onDeleteProject={handleDeleteProject} />;
+                case 'storyBooster': return <StoryBooster onGenerateColoringPages={handleGenerateColoringPagesFromStory} />;
+                case 'coloringBook': return <ColoringBookGenerator initialPrompt={initialColoringBookPrompt} initialImage={initialColoringPageImage} />;
+                case 'storyboardGenerator': return initialStoryForStoryboard ? <StoryboardGenerator storyText={initialStoryForStoryboard} onBack={handleBackToProject} /> : <ProjectDetail onLaunchTool={handleLaunchTool} onBackToHub={handleBackToHub} onCreateStoryboard={handleCreateStoryboardFromStory} />;
+                default: return <ProjectDetail onLaunchTool={handleLaunchTool} onBackToHub={handleBackToHub} onCreateStoryboard={handleCreateStoryboardFromStory} />;
             }
         }
-        return <ProjectDetail project={activeProject} onLaunchTool={handleLaunchTool} onBackToHub={handleBackToHub} onDeleteProject={handleDeleteProject} />;
+        return <ProjectDetail onLaunchTool={handleLaunchTool} onBackToHub={handleBackToHub} onCreateStoryboard={handleCreateStoryboardFromStory} />;
     }
-    return <ProjectHub projects={projects} onCreateProject={handleCreateProject} onSelectProject={setActiveProjectId} />;
+    return <ProjectHub />;
   };
   
   return (
@@ -211,5 +164,13 @@ export default function App() {
         }
       `}</style>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ProjectProvider>
+      <AppContent />
+    </ProjectProvider>
   );
 }

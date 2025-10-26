@@ -6,7 +6,21 @@ export interface Message {
   sources?: { uri: string; title: string }[];
 }
 
-export type AppFeature = 'projectHub' | 'coloringBook' | 'imageEditor' | 'videoGenerator' | 'liveChat' | 'storyBooster' | 'stickerMaker';
+export type AppFeature = 'projectHub' | 'coloringBook' | 'imageEditor' | 'videoGenerator' | 'liveChat' | 'storyBooster' | 'stickerMaker' | 'storyboardGenerator';
+
+// NEW: Storyboard type
+export interface StoryboardScene {
+  scene_description: string;
+  image_prompt: string;
+  characters_mentioned: string[];
+}
+
+// NEW: Style Palette type
+export interface Style {
+  id: string;
+  name: string;
+  imageB64: string;
+}
 
 // NEW: Character Sheet type
 export interface Character {
@@ -17,7 +31,7 @@ export interface Character {
 }
 
 // NEW: Project Hub types
-export type AssetType = 'story' | 'image' | 'sticker' | 'video' | 'coloringBookPdf' | 'character';
+export type AssetType = 'story' | 'image' | 'sticker' | 'video' | 'coloringBookPdf' | 'character' | 'style';
 
 export interface ProjectAsset {
   id: string; // e.g., timestamp
@@ -34,7 +48,8 @@ export interface Project {
   description: string;
   lastModified: number;
   assets: ProjectAsset[];
-  characterSheet: Character[]; // NEW: For character consistency
+  characterSheet: Character[]; // For character consistency
+  stylePalette: Style[]; // NEW: For style consistency
 }
 
 

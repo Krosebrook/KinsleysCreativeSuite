@@ -1,49 +1,8 @@
 import React, { useState } from 'react';
 import type { Project } from '../types';
-import { SparklesIcon, FolderPlusIcon, FolderKanbanIcon, XIcon } from './icons';
-
-interface ProjectHubProps {
-    projects: Project[];
-    onCreateProject: (name: string, description: string) => void;
-    onSelectProject: (projectId: string) => void;
-}
-
-const CreateProjectModal: React.FC<{
-    onClose: () => void;
-    onCreate: (name: string, description: string) => void;
-}> = ({ onClose, onCreate }) => {
-    const [name, setName] = useState('');
-    const [description, setDescription] = useState('');
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (name.trim()) {
-            onCreate(name, description);
-        }
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4 animate-fade-in">
-            <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-2xl max-w-lg w-full relative">
-                <button onClick={onClose} className="absolute top-4 right-4 p-1 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700">
-                    <XIcon className="w-5 h-5" />
-                </button>
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    <h3 className="text-2xl font-bold text-slate-800 dark:text-slate-200 text-center">Create New Project</h3>
-                    <div>
-                        <label htmlFor="projectName" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Project Name</label>
-                        <input id="projectName" type="text" value={name} onChange={e => setName(e.target.value)} placeholder="e.g., Sci-Fi Novel Illustrations" required className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                    </div>
-                    <div>
-                        <label htmlFor="projectDesc" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Description (Optional)</label>
-                        <textarea id="projectDesc" value={description} onChange={e => setDescription(e.target.value)} rows={3} placeholder="A short description of your project's goals" className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                    </div>
-                    <button type="submit" className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-transform transform hover:scale-105 shadow-lg">Create Project</button>
-                </form>
-            </div>
-        </div>
-    );
-};
+import { SparklesIcon, FolderPlusIcon, FolderKanbanIcon } from './icons';
+import { useProjects } from '../contexts/ProjectContext';
+import { CreateProjectModal } from './modals/CreateProjectModal';
 
 const ProjectCard: React.FC<{ project: Project; onSelect: () => void }> = ({ project, onSelect }) => {
     const firstImageAsset = project.assets.find(a => a.type === 'image');
@@ -68,12 +27,14 @@ const ProjectCard: React.FC<{ project: Project; onSelect: () => void }> = ({ pro
 };
 
 
-export const ProjectHub: React.FC<ProjectHubProps> = ({ projects, onCreateProject, onSelectProject }) => {
+export const ProjectHub: React.FC = () => {
+    const { projects, createProject, setActiveProjectId } = useProjects();
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     return (
         <>
-            {isModalOpen && <CreateProjectModal onClose={() => setIsModalOpen(false)} onCreate={(name, desc) => { onCreateProject(name, desc); setIsModalOpen(false); }} />}
+            {isModalOpen && <CreateProjectModal onClose={() => setIsModalOpen(false)} onCreate={(name, desc) => { createProject(name, desc); setIsModalOpen(false); }} />}
+            
             <header className="flex justify-between items-center mb-10 md:mb-12">
                 <div>
                     <h1 className="text-4xl md:text-5xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">Your Projects</h1>
@@ -87,7 +48,7 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({ projects, onCreateProjec
 
             {projects.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    {projects.map(p => <ProjectCard key={p.id} project={p} onSelect={() => onSelectProject(p.id)} />)}
+                    {projects.map(p => <ProjectCard key={p.id} project={p} onSelect={() => setActiveProjectId(p.id)} />)}
                 </div>
             ) : (
                 <div className="text-center py-20 px-6 bg-slate-50 dark:bg-slate-800/50 rounded-2xl">

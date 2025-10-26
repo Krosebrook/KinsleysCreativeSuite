@@ -1,18 +1,18 @@
 import React from 'react';
-import type { Project, ProjectAsset, AppFeature, Character } from '../types';
+import type { ProjectAsset, AppFeature, Character, Style } from '../types';
+import { useProjects } from '../contexts/ProjectContext';
 import { 
     ArrowLeftIcon, BrushIcon, ImageIcon, VideoIcon, MicIcon, BookOpenIcon, StickerIcon, TrashIcon,
-    SparklesIcon, UserIcon
+    SparklesIcon, UserIcon, ClapperboardIcon, PaletteIcon
 } from './icons';
 
 interface ProjectDetailProps {
-    project: Project;
     onLaunchTool: (feature: AppFeature) => void;
     onBackToHub: () => void;
-    onDeleteProject: (projectId: string) => void;
+    onCreateStoryboard: (storyText: string) => void;
 }
 
-const featureMap: Record<Exclude<AppFeature, 'projectHub'>, { icon: React.ElementType, label: string }> = {
+const featureMap: Record<Exclude<AppFeature, 'projectHub' | 'storyboardGenerator'>, { icon: React.ElementType, label: string }> = {
     coloringBook: { icon: BrushIcon, label: "Coloring Book" },
     imageEditor: { icon: ImageIcon, label: "Image Editor" },
     stickerMaker: { icon: StickerIcon, label: "Sticker Maker" },
@@ -20,21 +20,32 @@ const featureMap: Record<Exclude<AppFeature, 'projectHub'>, { icon: React.Elemen
     videoGenerator: { icon: VideoIcon, label: "Video Generator" },
     liveChat: { icon: MicIcon, label: "Live Chat" },
 };
-const features = Object.keys(featureMap) as Exclude<AppFeature, 'projectHub'>[];
+const features = Object.keys(featureMap) as Exclude<AppFeature, 'projectHub' | 'storyboardGenerator'>[];
 
-const AssetCard: React.FC<{ asset: ProjectAsset }> = ({ asset }) => {
-    const isImage = asset.type === 'image' || asset.type === 'sticker' || asset.type === 'character';
+const AssetCard: React.FC<{ asset: ProjectAsset, onCreateStoryboard: (storyText: string) => void }> = ({ asset, onCreateStoryboard }) => {
+    const isImage = ['image', 'sticker', 'character', 'style'].includes(asset.type);
     
     return (
-        <div className="bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow">
+        <div className="bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow flex flex-col">
             {isImage && (
                 <div className="w-full h-32 bg-slate-200 dark:bg-slate-700 rounded-md mb-3 overflow-hidden">
                     <img src={`data:image/png;base64,${asset.data}`} alt={asset.name} className="w-full h-full object-cover" />
                 </div>
             )}
-            <h4 className="font-bold text-slate-800 dark:text-slate-200 truncate">{asset.name}</h4>
-            <p className="text-xs text-slate-500 dark:text-slate-400 capitalize">{asset.type}</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{new Date(parseInt(asset.id)).toLocaleString()}</p>
+            <div className="flex-grow">
+                <h4 className="font-bold text-slate-800 dark:text-slate-200 truncate">{asset.name}</h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 capitalize">{asset.type}</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{new Date(parseInt(asset.id)).toLocaleString()}</p>
+            </div>
+            {asset.type === 'story' && (
+                <button 
+                    onClick={() => onCreateStoryboard(asset.data)}
+                    className="mt-3 w-full flex items-center justify-center space-x-2 bg-purple-600 text-white font-semibold text-sm py-2 px-3 rounded-lg hover:bg-purple-700 transition"
+                >
+                    <ClapperboardIcon className="w-4 h-4" />
+                    <span>Create Storyboard</span>
+                </button>
+            )}
         </div>
     );
 };
@@ -48,8 +59,32 @@ const CharacterCard: React.FC<{ character: Character }> = ({ character }) => (
     </div>
 );
 
-export const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, onLaunchTool, onBackToHub, onDeleteProject }) => {
-    const assetsByType = project.assets.reduce((acc, asset) => {
+const StyleCard: React.FC<{ style: Style }> = ({ style }) => (
+    <div className="flex-shrink-0 w-32 text-center">
+        <div className="w-32 h-32 bg-slate-200 dark:bg-slate-700 rounded-lg mb-2 overflow-hidden">
+            <img src={`data:image/png;base64,${style.imageB64}`} alt={style.name} className="w-full h-full object-cover" />
+        </div>
+        <h4 className="font-bold text-sm text-slate-800 dark:text-slate-200 truncate">{style.name}</h4>
+    </div>
+);
+
+export const ProjectDetail: React.FC<ProjectDetailProps> = ({ onLaunchTool, onBackToHub, onCreateStoryboard }) => {
+    const { activeProject, deleteProject } = useProjects();
+    
+    if (!activeProject) {
+        return (
+            <div className="text-center p-8">
+                <h1 className="text-2xl font-bold">Project Not Found</h1>
+                <p className="text-slate-500 mt-2">This project may have been deleted.</p>
+                <button onClick={onBackToHub} className="mt-4 flex items-center mx-auto space-x-2 text-indigo-600 dark:text-indigo-400 font-semibold">
+                    <ArrowLeftIcon className="w-5 h-5" />
+                    <span>Return to All Projects</span>
+                </button>
+            </div>
+        );
+    }
+    
+    const assetsByType = activeProject.assets.reduce((acc, asset) => {
         const type = asset.type;
         if (!acc[type]) {
             acc[type] = [];
@@ -66,17 +101,16 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, onLaunchT
                     <span>All Projects</span>
                 </button>
                 <div className="text-center">
-                    <h1 className="text-4xl md:text-5xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">{project.name}</h1>
-                    <p className="mt-2 text-lg text-slate-600 dark:text-slate-400 max-w-2xl">{project.description}</p>
+                    <h1 className="text-4xl md:text-5xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">{activeProject.name}</h1>
+                    <p className="mt-2 text-lg text-slate-600 dark:text-slate-400 max-w-2xl">{activeProject.description}</p>
                 </div>
-                <button onClick={() => onDeleteProject(project.id)} className="flex items-center space-x-2 text-sm font-semibold text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition bg-red-100 dark:bg-red-900/30 px-3 py-2 rounded-lg">
+                <button onClick={() => deleteProject(activeProject.id)} className="flex items-center space-x-2 text-sm font-semibold text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition bg-red-100 dark:bg-red-900/30 px-3 py-2 rounded-lg">
                     <TrashIcon className="w-4 h-4" />
                     <span>Delete Project</span>
                 </button>
             </header>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Left column for tools */}
                 <div className="lg:col-span-1">
                     <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-xl sticky top-8">
                         <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200 mb-4 flex items-center space-x-2">
@@ -94,32 +128,44 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, onLaunchT
                     </div>
                 </div>
 
-                {/* Right column for assets */}
                 <div className="lg:col-span-2 space-y-8">
-                    {/* NEW: Character Sheet Section */}
                     <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-xl">
                         <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200 mb-4 flex items-center space-x-2">
                             <UserIcon className="w-6 h-6 text-amber-500" />
                             <span>Character Sheet</span>
                         </h2>
-                        {project.characterSheet && project.characterSheet.length > 0 ? (
+                        {activeProject.characterSheet && activeProject.characterSheet.length > 0 ? (
                             <div className="flex space-x-4 overflow-x-auto pb-2 -mb-2">
-                                {project.characterSheet.map(char => <CharacterCard key={char.id} character={char} />)}
+                                {activeProject.characterSheet.map(char => <CharacterCard key={char.id} character={char} />)}
                             </div>
                         ) : (
                             <p className="text-slate-500 dark:text-slate-400">No characters yet. Go to the Image Editor to create and save one!</p>
                         )}
                     </div>
+                    
+                    <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-xl">
+                        <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200 mb-4 flex items-center space-x-2">
+                            <PaletteIcon className="w-6 h-6 text-teal-500" />
+                            <span>Style Palette</span>
+                        </h2>
+                        {activeProject.stylePalette && activeProject.stylePalette.length > 0 ? (
+                            <div className="flex space-x-4 overflow-x-auto pb-2 -mb-2">
+                                {activeProject.stylePalette.map(style => <StyleCard key={style.id} style={style} />)}
+                            </div>
+                        ) : (
+                            <p className="text-slate-500 dark:text-slate-400">No styles saved. Go to the Image Editor to save a visual style!</p>
+                        )}
+                    </div>
 
                     <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-xl min-h-[40vh]">
-                        <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200 mb-4">Project Assets ({project.assets.length})</h2>
-                        {project.assets.length > 0 ? (
+                        <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200 mb-4">Project Assets ({activeProject.assets.length})</h2>
+                        {activeProject.assets.length > 0 ? (
                             <div className="space-y-6">
                                 {Object.keys(assetsByType).map((type) => (
                                     <div key={type}>
                                         <h3 className="text-lg font-semibold text-slate-600 dark:text-slate-300 mb-3 capitalize border-b border-slate-200 dark:border-slate-700 pb-2">{type}s</h3>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                                            {assetsByType[type].map(asset => <AssetCard key={asset.id} asset={asset} />)}
+                                            {assetsByType[type].map(asset => <AssetCard key={asset.id} asset={asset} onCreateStoryboard={onCreateStoryboard} />)}
                                         </div>
                                     </div>
                                 ))}
