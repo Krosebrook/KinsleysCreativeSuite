@@ -9,23 +9,29 @@ export interface Message {
   timestamp: number;
 }
 
-export type AppFeature = 'projectHub' | 'coloringBook' | 'imageEditor' | 'videoGenerator' | 'liveChat' | 'storyBooster' | 'stickerMaker' | 'storyboardGenerator';
+export type AppFeature = 'projectHub' | 'coloringBook' | 'imageEditor' | 'videoGenerator' | 'liveChat' | 'storyBooster' | 'stickerMaker' | 'storyboardGenerator' | 'narrationTool';
 
-// NEW: Storyboard type
 export interface StoryboardScene {
   scene_description: string;
   image_prompt: string;
   characters_mentioned: string[];
 }
 
-// NEW: Style Palette type
+// NEW: For Storyboard-to-Video workflow
+export interface StoryboardVideoClip {
+    status: 'pending' | 'loading' | 'done' | 'error';
+    url?: string;
+    videoObject?: any;
+    error?: string;
+    sceneIndex: number;
+}
+
 export interface Style {
   id: string;
   name: string;
   imageB64: string;
 }
 
-// NEW: Character Sheet type
 export interface Character {
   id: string;
   name: string;
@@ -33,21 +39,19 @@ export interface Character {
   prompt: string;
 }
 
-// NEW: Layer type for Image Editor
 export interface Layer {
   id: string;
   name: string;
   imageB64: string;
 }
 
-// NEW: Project Hub types
-export type AssetType = 'story' | 'image' | 'sticker' | 'video' | 'coloringBookPdf' | 'character' | 'style';
+export type AssetType = 'story' | 'image' | 'sticker' | 'video' | 'coloringBookPdf' | 'character' | 'style' | 'audio';
 
 export interface ProjectAsset {
   id: string; // e.g., timestamp
   type: AssetType;
   name: string; // e.g., "Main character design", "Chapter 1 Draft"
-  data: string; // story text, base64 image, video URL, pdf URL
+  data: string; // story text, base64 image, video URL, pdf URL, audio base64
   prompt?: string; // The prompt used to generate it
   thumb?: string; // A thumbnail b64, for videos or PDFs
 }

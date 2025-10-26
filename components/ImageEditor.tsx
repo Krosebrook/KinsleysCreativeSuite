@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { editImage, convertImageToLineArt } from '../services/geminiService';
 import { fileToBase64 } from '../utils/helpers';
-import { LoaderIcon, SparklesIcon, UndoIcon, RedoIcon, ImageIcon, SaveIcon, CheckIcon, XIcon, MaskIcon, VideoIcon, BrushIcon, ArrowLeftIcon, UserIcon, PaletteIcon, LayersIcon, TrashIcon } from './icons';
+// FIX: Added 'PencilIcon' to the import list.
+import { LoaderIcon, SparklesIcon, UndoIcon, RedoIcon, ImageIcon, SaveIcon, CheckIcon, XIcon, MaskIcon, VideoIcon, BrushIcon, ArrowLeftIcon, UserIcon, PaletteIcon, LayersIcon, TrashIcon, ExpandIcon, PencilIcon } from './icons';
 import { MaskingCanvas } from './MaskingCanvas';
 import type { ProjectAsset, Character, Layer } from '../types';
 import { useProjects } from '../contexts/ProjectContext';
@@ -14,6 +15,8 @@ interface ImageEditorProps {
     onConvertToColoringPage: (newImageB64: string) => void;
     incomingStickerB64?: string | null;
 }
+
+type EditMode = 'prompt' | 'mask' | 'expand';
 
 export const ImageEditor: React.FC<ImageEditorProps> = ({ onBack, onSendToVideoGenerator, onConvertToColoringPage, incomingStickerB64 }) => {
     const { activeProject, addAsset, addCharacter, addStyle } = useProjects();
@@ -28,9 +31,11 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onBack, onSendToVideoG
     const [isConverting, setIsConverting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const [isMasking, setIsMasking] = useState(false);
+    const [editMode, setEditMode] = useState<EditMode>('prompt');
     const [activeMaskB64, setActiveMaskB64] = useState<string | null>(null);
     const [stickerToApply, setStickerToApply] = useState<string | null>(null);
+
+    const [expandSize, setExpandSize] = useState(256);
 
     const [selectedCharacterB64, setSelectedCharacterB64] = useState<string | null>(null);
     const [selectedStyleB64, setSelectedStyleB64] = useState<string | null>(null);
@@ -82,8 +87,8 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onBack, onSendToVideoG
         }
     };
 
-    const generatePreview = async (editPrompt: string) => {
-        if (!currentImageB64 || !editPrompt || isLoading || !mimeType) return;
+    const generatePreview = async (editPrompt: string, baseImageB64: string, maskB64?: string | null) => {
+        if (!baseImageB64 || !editPrompt || isLoading || !mimeType) return;
 
         setIsLoading(true);
         setError(null);
@@ -91,7 +96,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onBack, onSendToVideoG
         setPreviewImageB64(null);
 
         try {
-            const editedB64 = await editImage(currentImageB64, mimeType, editPrompt, activeMaskB64, stickerToApply, selectedCharacterB64, selectedStyleB64);
+            const editedB64 = await editImage(baseImageB64, mimeType, editPrompt, maskB64, stickerToApply, selectedCharacterB64, selectedStyleB64);
             setPreviewImageB64(editedB64);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'An unknown error occurred.');
@@ -102,7 +107,9 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onBack, onSendToVideoG
     
     const handleManualPreview = (e: React.FormEvent) => {
         e.preventDefault();
-        generatePreview(prompt);
+        if (currentImageB64) {
+             generatePreview(prompt, currentImageB64, activeMaskB64);
+        }
     };
 
     const handleConfirmEdit = () => {
@@ -117,6 +124,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onBack, onSendToVideoG
         setHistoryIndex(newHistory.length);
         clearActiveEdits();
         setStickerToApply(null);
+        setEditMode('prompt');
     };
 
     const handleDiscardPreview = () => {
@@ -135,7 +143,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onBack, onSendToVideoG
         clearActiveEdits();
         setStickerToApply(null);
         if (canRedo) {
-            setHistoryIndex(historyIndex + 1);
+            setHistoryIndex(historyIndex - 1);
         }
     };
 
@@ -210,9 +218,60 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onBack, onSendToVideoG
         setSelectedStyleB64(prev => prev === styleB64 ? null : styleB64);
     };
 
+    const handleExpandImage = () => {
+        if (!currentImageB64) return;
+        
+        const img = new Image();
+        img.onload = () => {
+            const originalWidth = img.width;
+            const originalHeight = img.height;
+            const newWidth = originalWidth + expandSize * 2;
+            const newHeight = originalHeight + expandSize * 2;
+            
+            // Create expanded image canvas
+            const expandedCanvas = document.createElement('canvas');
+            expandedCanvas.width = newWidth;
+            expandedCanvas.height = newHeight;
+            const expandedCtx = expandedCanvas.getContext('2d');
+            expandedCtx?.drawImage(img, expandSize, expandSize);
+            const expandedImageB64 = expandedCanvas.toDataURL('image/png').split(',')[1];
+            
+            // Create mask canvas
+            const maskCanvas = document.createElement('canvas');
+            maskCanvas.width = newWidth;
+            maskCanvas.height = newHeight;
+            const maskCtx = maskCanvas.getContext('2d');
+            if (maskCtx) {
+                maskCtx.fillStyle = 'white'; // Area to edit
+                maskCtx.fillRect(0, 0, newWidth, newHeight);
+                maskCtx.fillStyle = 'black'; // Area to keep
+                maskCtx.fillRect(expandSize, expandSize, originalWidth, originalHeight);
+            }
+            const maskB64 = maskCanvas.toDataURL('image/png').split(',')[1];
+            
+            const expandPrompt = 'Expand the image to fill the empty space, maintaining the original style and content seamlessly.';
+            generatePreview(expandPrompt, expandedImageB64, maskB64);
+        };
+        img.src = `data:${mimeType};base64,${currentImageB64}`;
+    };
+
+    const EditModeButton: React.FC<{
+        mode: EditMode;
+        current: EditMode;
+        onClick: (mode: EditMode) => void;
+        children: React.ReactNode;
+    }> = ({ mode, current, onClick, children }) => (
+        <button
+            onClick={() => onClick(mode)}
+            className={`flex-1 flex items-center justify-center space-x-2 py-2 px-3 text-sm font-semibold rounded-md transition ${mode === current ? 'bg-indigo-600 text-white shadow' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'}`}
+        >
+            {children}
+        </button>
+    );
+
     return (
         <>
-            {isMasking && currentImageB64 && <MaskingCanvas baseImageB64={currentImageB64} onClose={() => setIsMasking(false)} onSave={(mask) => {setActiveMaskB64(mask); setIsMasking(false);}} />}
+            {editMode === 'mask' && currentImageB64 && <MaskingCanvas baseImageB64={currentImageB64} onClose={() => setEditMode('prompt')} onSave={(mask) => {setActiveMaskB64(mask); setEditMode('prompt');}} />}
             {isAddCharacterModalOpen && <AddCharacterModal onClose={() => setIsAddCharacterModalOpen(false)} onSave={handleSaveCharacter} />}
             {isAddStyleModalOpen && <AddStyleModal onClose={() => setIsAddStyleModalOpen(false)} onSave={handleSaveStyle} />}
             
@@ -253,42 +312,65 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onBack, onSendToVideoG
                             </div>
                         </div>
                     ) : (
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                {activeProject?.characterSheet?.length > 0 && (
-                                    <div className="space-y-2">
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">2. Use Character</label>
-                                        <div className="flex items-center space-x-2 p-2 bg-slate-50 dark:bg-slate-700/50 rounded-lg overflow-x-auto">
-                                            {activeProject.characterSheet.map(char => (
-                                                <button key={char.id} onClick={() => handleSelectCharacter(char.imageB64)} className={`flex-shrink-0 p-1.5 rounded-lg border-2 transition ${selectedCharacterB64 === char.imageB64 ? 'border-indigo-500' : 'border-transparent hover:border-slate-300 dark:hover:border-slate-500'}`}>
-                                                    <img src={`data:image/png;base64,${char.imageB64}`} alt={char.name} title={char.name} className="w-12 h-12 object-cover rounded-md" />
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                                {activeProject?.stylePalette?.length > 0 && (
-                                    <div className="space-y-2">
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">3. Use Style</label>
-                                        <div className="flex items-center space-x-2 p-2 bg-slate-50 dark:bg-slate-700/50 rounded-lg overflow-x-auto">
-                                            {activeProject.stylePalette.map(style => (
-                                                <button key={style.id} onClick={() => handleSelectStyle(style.imageB64)} className={`flex-shrink-0 p-1.5 rounded-lg border-2 transition ${selectedStyleB64 === style.imageB64 ? 'border-teal-500' : 'border-transparent hover:border-slate-300 dark:hover:border-slate-500'}`}>
-                                                    <img src={`data:image/png;base64,${style.imageB64}`} alt={style.name} title={style.name} className="w-12 h-12 object-cover rounded-md" />
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
+                        hasImage && <div className="space-y-4">
+                            <div className="flex items-center space-x-2 p-1 bg-slate-100 dark:bg-slate-900 rounded-lg">
+                                <EditModeButton mode="prompt" current={editMode} onClick={setEditMode}><PencilIcon className="w-4 h-4" /><span>Prompt</span></EditModeButton>
+                                <EditModeButton mode="mask" current={editMode} onClick={setEditMode}><MaskIcon className="w-4 h-4" /><span>Mask</span></EditModeButton>
+                                <EditModeButton mode="expand" current={editMode} onClick={setEditMode}><ExpandIcon className="w-4 h-4" /><span>Expand</span></EditModeButton>
                             </div>
-                            <form onSubmit={handleManualPreview}>
-                                <div>
-                                    <label htmlFor="prompt" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">4. Describe Your Edit</label>
-                                    <input id="prompt" type="text" value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="e.g., Make the sky look like a galaxy" className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition" disabled={isLoading || !hasImage} />
+                            
+                            {editMode === 'prompt' && (
+                                <div className="space-y-4 animate-fade-in">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {activeProject?.characterSheet?.length > 0 && (
+                                            <div className="space-y-2">
+                                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">2. Use Character</label>
+                                                <div className="flex items-center space-x-2 p-2 bg-slate-50 dark:bg-slate-700/50 rounded-lg overflow-x-auto">
+                                                    {activeProject.characterSheet.map(char => (
+                                                        <button key={char.id} onClick={() => handleSelectCharacter(char.imageB64)} className={`flex-shrink-0 p-1.5 rounded-lg border-2 transition ${selectedCharacterB64 === char.imageB64 ? 'border-indigo-500' : 'border-transparent hover:border-slate-300 dark:hover:border-slate-500'}`}>
+                                                            <img src={`data:image/png;base64,${char.imageB64}`} alt={char.name} title={char.name} className="w-12 h-12 object-cover rounded-md" />
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {activeProject?.stylePalette?.length > 0 && (
+                                            <div className="space-y-2">
+                                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">3. Use Style</label>
+                                                <div className="flex items-center space-x-2 p-2 bg-slate-50 dark:bg-slate-700/50 rounded-lg overflow-x-auto">
+                                                    {activeProject.stylePalette.map(style => (
+                                                        <button key={style.id} onClick={() => handleSelectStyle(style.imageB64)} className={`flex-shrink-0 p-1.5 rounded-lg border-2 transition ${selectedStyleB64 === style.imageB64 ? 'border-teal-500' : 'border-transparent hover:border-slate-300 dark:hover:border-slate-500'}`}>
+                                                            <img src={`data:image/png;base64,${style.imageB64}`} alt={style.name} title={style.name} className="w-12 h-12 object-cover rounded-md" />
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <form onSubmit={handleManualPreview}>
+                                        <div>
+                                            <label htmlFor="prompt" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">4. Describe Your Edit</label>
+                                            <input id="prompt" type="text" value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="e.g., Make the sky look like a galaxy" className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition" disabled={isLoading || !hasImage} />
+                                        </div>
+                                    </form>
+                                    <button type="button" onClick={(e) => handleManualPreview(e as any)} className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed flex items-center justify-center space-x-2 shadow-lg" disabled={isLoading || !hasImage || !prompt}>
+                                        {isLoading ? <><LoaderIcon className="h-5 w-5" /><span>Generating Preview...</span></> : <><SparklesIcon className="h-5 w-5" /><span>Preview Edit</span></>}
+                                    </button>
                                 </div>
-                            </form>
-                            <button type="button" onClick={(e) => handleManualPreview(e as any)} className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed flex items-center justify-center space-x-2 shadow-lg" disabled={isLoading || !hasImage || !prompt}>
-                                {isLoading ? <><LoaderIcon className="h-5 w-5" /><span>Generating Preview...</span></> : <><SparklesIcon className="h-5 w-5" /><span>Preview Edit</span></>}
-                            </button>
+                            )}
+
+                            {editMode === 'expand' && (
+                                <div className="space-y-4 p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg animate-fade-in">
+                                    <h3 className="text-lg font-semibold">Generative Expand</h3>
+                                    <div>
+                                        <label htmlFor="expandSize" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Border Size ({expandSize}px)</label>
+                                        <input id="expandSize" type="range" min="64" max="512" step="64" value={expandSize} onChange={(e) => setExpandSize(Number(e.target.value))} className="w-full" />
+                                    </div>
+                                    <button onClick={handleExpandImage} className="w-full bg-teal-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-teal-600 transition-transform transform hover:scale-105" disabled={isLoading}>
+                                        Apply Expand
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
 

@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { analyzeText, improveText, suggestTitles, generateStoryIdea } from '../services/geminiService';
-import { LoaderIcon, SparklesIcon, BookOpenIcon, BrushIcon } from './icons';
+import { LoaderIcon, SparklesIcon, BookOpenIcon, BrushIcon, Volume2Icon } from './icons';
 
 const AUTOSAVE_KEY = 'storyBooster_autosavedText';
 
 interface StoryBoosterProps {
     onGenerateColoringPages: (storyText: string) => void;
+    onNarrateStory: (storyText: string) => void;
 }
 
-export const StoryBooster: React.FC<StoryBoosterProps> = ({ onGenerateColoringPages }) => {
+export const StoryBooster: React.FC<StoryBoosterProps> = ({ onGenerateColoringPages, onNarrateStory }) => {
     const [text, setText] = useState(
 `The old lighthouse stood on the cliff's edge, a lonely sentinel against the raging sea. Every night, its beam cut through the darkness, a beacon of hope for sailors. But tonight, the light was gone. A young girl named Elara, who lived in the nearby village, noticed its absence. She knew the lighthouse keeper, old Finn, would never let the light go out. Something was wrong.`
     );
@@ -205,13 +206,20 @@ export const StoryBooster: React.FC<StoryBoosterProps> = ({ onGenerateColoringPa
                             <div className="animate-fade-in">
                                 {renderResult()}
                                 {typeof result === 'string' && (
-                                    <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
+                                    <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700 space-y-3">
                                         <button
                                             onClick={() => onGenerateColoringPages(result as string)}
                                             className="w-full flex items-center justify-center space-x-2 bg-teal-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-teal-600 transition shadow-md"
                                         >
                                             <BrushIcon className="h-5 w-5" />
                                             <span>Create Coloring Pages from this Story</span>
+                                        </button>
+                                        <button
+                                            onClick={() => onNarrateStory(result as string)}
+                                            className="w-full flex items-center justify-center space-x-2 bg-sky-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-sky-600 transition shadow-md"
+                                        >
+                                            <Volume2Icon className="h-5 w-5" />
+                                            <span>Narrate this Story</span>
                                         </button>
                                     </div>
                                 )}

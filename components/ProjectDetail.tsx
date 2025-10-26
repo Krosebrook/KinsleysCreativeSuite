@@ -3,7 +3,7 @@ import type { ProjectAsset, AppFeature, Character, Style } from '../types';
 import { useProjects } from '../contexts/ProjectContext';
 import { 
     ArrowLeftIcon, BrushIcon, ImageIcon, VideoIcon, MicIcon, BookOpenIcon, StickerIcon, TrashIcon,
-    SparklesIcon, UserIcon, ClapperboardIcon, PaletteIcon
+    SparklesIcon, UserIcon, ClapperboardIcon, PaletteIcon, Volume2Icon
 } from './icons';
 
 interface ProjectDetailProps {
@@ -17,6 +17,7 @@ const featureMap: Record<Exclude<AppFeature, 'projectHub' | 'storyboardGenerator
     imageEditor: { icon: ImageIcon, label: "Image Editor" },
     stickerMaker: { icon: StickerIcon, label: "Sticker Maker" },
     storyBooster: { icon: BookOpenIcon, label: "Story Booster" },
+    narrationTool: { icon: Volume2Icon, label: "Narration Tool" },
     videoGenerator: { icon: VideoIcon, label: "Video Generator" },
     liveChat: { icon: MicIcon, label: "Live Chat" },
 };
@@ -37,6 +38,11 @@ const AssetCard: React.FC<{ asset: ProjectAsset, onCreateStoryboard: (storyText:
             {isImage && (
                 <div className="w-full h-32 bg-slate-200 dark:bg-slate-700 rounded-md mb-3 overflow-hidden">
                     <img src={`data:image/png;base64,${asset.data}`} alt={asset.name} className="w-full h-full object-cover" />
+                </div>
+            )}
+            {asset.type === 'audio' && (
+                 <div className="w-full h-32 bg-slate-200 dark:bg-slate-700 rounded-md mb-3 flex items-center justify-center">
+                    <Volume2Icon className="w-12 h-12 text-slate-400 dark:text-slate-500" />
                 </div>
             )}
             <div className="flex-grow">

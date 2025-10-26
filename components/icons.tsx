@@ -288,6 +288,13 @@ export const ArrowLeftIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) =>
     </Icon>
 );
 
+export const ArrowRightIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <Icon {...props}>
+        <path d="m12 19 7-7-7-7"/>
+        <path d="M5 12h14"/>
+    </Icon>
+);
+
 export const UserIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <Icon {...props}>
         <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
@@ -340,5 +347,44 @@ export const LayersIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
         <polygon points="12 2 2 7 12 12 22 7 12 2"/>
         <polyline points="2 17 12 22 22 17"/>
         <polyline points="2 12 12 17 22 12"/>
+    </Icon>
+);
+
+export const PlayIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <Icon {...props}>
+        <polygon points="5 3 19 12 5 21 5 3"/>
+    </Icon>
+);
+
+export const PauseIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <Icon {...props}>
+        <rect x="6" y="4" width="4" height="16"/>
+        <rect x="14" y="4" width="4" height="16"/>
+    </Icon>
+);
+
+export const Volume2Icon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <Icon {...props}>
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+    </Icon>
+);
+
+export const DownloadCloudIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <Icon {...props}>
+        <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/>
+        <path d="M12 12v9"/>
+        <path d="m8 17 4 4 4-4"/>
+    </Icon>
+);
+
+export const ExpandIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <Icon {...props}>
+        <path d="m21 21-6-6m6 6v-4.8m0 4.8h-4.8"/>
+        <path d="M3 15.2V21h5.8"/>
+        <path d="M3 3l6 6"/>
+        <path d="M21 8.8V3h-5.8"/>
+        <path d="M15 3h6v6"/>
     </Icon>
 );

@@ -76,6 +76,8 @@ const getSystemInstruction = (feature: AppFeature | null): string => {
              return 'You are a storyboard artist assistant. You help users visualize their stories by suggesting key scenes, camera shots, and character poses. You can help refine image prompts to ensure visual consistency.';
         case 'liveChat':
              return 'You are a friendly and helpful conversational AI. Keep your responses concise and natural. You are in a real-time voice chat.';
+        case 'narrationTool':
+            return 'You are a voice-over artist assistant. You can help users format text for multi-speaker narration and suggest different vocal styles (e.g., "Say cheerfully: ...").';
         // for projectHub or null activeFeature
         default:
             return 'You are a friendly and helpful creative assistant for the Gemini Creative Suite. You are aware of the user\'s current project assets and can see images they upload. Provide concise, helpful, and creative responses.';
@@ -587,5 +589,33 @@ export const extendVideo = async (
         return await pollVeoOperation(operation, videoAi, onProgress);
     } catch (error) {
         throw handleApiError(error, 'Video Extension');
+    }
+};
+
+// --- Audio Generation (TTS) ---
+export const generateSpeech = async (
+    text: string,
+    voice: string,
+): Promise<string> => {
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash-preview-tts",
+            contents: [{ parts: [{ text: text }] }],
+            config: {
+                responseModalities: [Modality.AUDIO],
+                speechConfig: {
+                    voiceConfig: {
+                        prebuiltVoiceConfig: { voiceName: voice },
+                    },
+                },
+            },
+        });
+        const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+        if (!base64Audio) {
+            throw new Error("No audio data was returned from the model.");
+        }
+        return base64Audio;
+    } catch (error) {
+        throw handleApiError(error, 'Speech Generation');
     }
 };

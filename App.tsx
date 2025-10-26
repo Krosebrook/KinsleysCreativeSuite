@@ -9,6 +9,8 @@ import { StickerMaker } from './components/StickerMaker';
 import { ProjectHub } from './components/ProjectHub';
 import { ProjectDetail } from './components/ProjectDetail';
 import { StoryboardGenerator } from './components/StoryboardGenerator';
+import { NarrationTool } from './components/NarrationTool';
+import { OnboardingTour } from './components/OnboardingTour';
 import { SunIcon, MoonIcon, SparklesIcon } from './components/icons';
 import type { AppFeature } from './types';
 import { dataURLtoFile } from './utils/helpers';
@@ -52,6 +54,7 @@ const AppContent: React.FC = () => {
   const [initialColoringPageImage, setInitialColoringPageImage] = useState<string | null>(null);
   const [initialColoringBookPrompt, setInitialColoringBookPrompt] = useState<string | null>(null);
   const [initialStoryForStoryboard, setInitialStoryForStoryboard] = useState<string | null>(null);
+  const [initialTextForNarration, setInitialTextForNarration] = useState<string | null>(null);
   
   const handleLaunchTool = (feature: AppFeature) => {
     if (activeProjectId) {
@@ -61,6 +64,7 @@ const AppContent: React.FC = () => {
       setInitialColoringPageImage(null);
       setInitialColoringBookPrompt(null);
       setInitialStoryForStoryboard(null);
+      setInitialTextForNarration(null);
       setActiveFeature(feature);
     }
   };
@@ -78,6 +82,7 @@ const AppContent: React.FC = () => {
     setInitialColoringPageImage(null);
     setInitialColoringBookPrompt(null);
     setInitialStoryForStoryboard(null);
+    setInitialTextForNarration(null);
   };
 
   // Handlers for cross-feature actions
@@ -107,6 +112,11 @@ const AppContent: React.FC = () => {
     setActiveFeature('storyboardGenerator');
   };
 
+  const handleNarrateStory = (storyText: string) => {
+    setInitialTextForNarration(storyText);
+    setActiveFeature('narrationTool');
+  };
+
   const renderContent = () => {
     if (activeProjectId && activeProject) {
         if (activeFeature) {
@@ -115,9 +125,10 @@ const AppContent: React.FC = () => {
                 case 'stickerMaker': return <StickerMaker onSendToEditor={handleSendStickerToEditor} />;
                 case 'videoGenerator': return <VideoGenerator initialImage={initialVideoGeneratorImage} />;
                 case 'liveChat': return <LiveChat />;
-                case 'storyBooster': return <StoryBooster onGenerateColoringPages={handleGenerateColoringPagesFromStory} />;
+                case 'storyBooster': return <StoryBooster onGenerateColoringPages={handleGenerateColoringPagesFromStory} onNarrateStory={handleNarrateStory} />;
                 case 'coloringBook': return <ColoringBookGenerator initialPrompt={initialColoringBookPrompt} initialImage={initialColoringPageImage} />;
                 case 'storyboardGenerator': return initialStoryForStoryboard ? <StoryboardGenerator storyText={initialStoryForStoryboard} onBack={handleBackToProject} /> : <ProjectDetail onLaunchTool={handleLaunchTool} onBackToHub={handleBackToHub} onCreateStoryboard={handleCreateStoryboardFromStory} />;
+                case 'narrationTool': return <NarrationTool initialText={initialTextForNarration} onBack={handleBackToProject} />;
                 default: return <ProjectDetail onLaunchTool={handleLaunchTool} onBackToHub={handleBackToHub} onCreateStoryboard={handleCreateStoryboardFromStory} />;
             }
         }
@@ -128,6 +139,7 @@ const AppContent: React.FC = () => {
   
   return (
     <div className="min-h-screen font-sans">
+      <OnboardingTour />
       <main className="container mx-auto px-4 py-8 md:py-12">
         <header className="max-w-6xl mx-auto mb-8 md:mb-12 flex justify-between items-center">
             <div className="flex items-center space-x-3">
