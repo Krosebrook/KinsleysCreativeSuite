@@ -22,11 +22,18 @@ const featureMap: Record<Exclude<AppFeature, 'projectHub' | 'storyboardGenerator
 };
 const features = Object.keys(featureMap) as Exclude<AppFeature, 'projectHub' | 'storyboardGenerator'>[];
 
-const AssetCard: React.FC<{ asset: ProjectAsset, onCreateStoryboard: (storyText: string) => void }> = ({ asset, onCreateStoryboard }) => {
+const AssetCard: React.FC<{ asset: ProjectAsset, onCreateStoryboard: (storyText: string) => void, onDelete: (id: string) => void }> = ({ asset, onCreateStoryboard, onDelete }) => {
     const isImage = ['image', 'sticker', 'character', 'style'].includes(asset.type);
     
     return (
-        <div className="bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow flex flex-col">
+        <div className="bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow flex flex-col relative group">
+             <button 
+                onClick={() => onDelete(asset.id)} 
+                className="absolute top-2 right-2 bg-red-600 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10 hover:bg-red-700"
+                aria-label="Delete asset"
+            >
+                <TrashIcon className="w-4 h-4" />
+            </button>
             {isImage && (
                 <div className="w-full h-32 bg-slate-200 dark:bg-slate-700 rounded-md mb-3 overflow-hidden">
                     <img src={`data:image/png;base64,${asset.data}`} alt={asset.name} className="w-full h-full object-cover" />
@@ -50,26 +57,40 @@ const AssetCard: React.FC<{ asset: ProjectAsset, onCreateStoryboard: (storyText:
     );
 };
 
-const CharacterCard: React.FC<{ character: Character }> = ({ character }) => (
-    <div className="flex-shrink-0 w-32 text-center">
+const CharacterCard: React.FC<{ character: Character, onDelete: (id: string) => void }> = ({ character, onDelete }) => (
+    <div className="flex-shrink-0 w-32 text-center group relative">
         <div className="w-32 h-32 bg-slate-200 dark:bg-slate-700 rounded-lg mb-2 overflow-hidden">
             <img src={`data:image/png;base64,${character.imageB64}`} alt={character.name} className="w-full h-full object-cover" />
         </div>
+        <button 
+            onClick={() => onDelete(character.id)} 
+            className="absolute top-1 right-1 bg-red-600 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10 hover:bg-red-700"
+            aria-label="Delete character"
+        >
+            <TrashIcon className="w-4 h-4" />
+        </button>
         <h4 className="font-bold text-sm text-slate-800 dark:text-slate-200 truncate">{character.name}</h4>
     </div>
 );
 
-const StyleCard: React.FC<{ style: Style }> = ({ style }) => (
-    <div className="flex-shrink-0 w-32 text-center">
+const StyleCard: React.FC<{ style: Style, onDelete: (id: string) => void }> = ({ style, onDelete }) => (
+    <div className="flex-shrink-0 w-32 text-center group relative">
         <div className="w-32 h-32 bg-slate-200 dark:bg-slate-700 rounded-lg mb-2 overflow-hidden">
             <img src={`data:image/png;base64,${style.imageB64}`} alt={style.name} className="w-full h-full object-cover" />
         </div>
+         <button 
+            onClick={() => onDelete(style.id)} 
+            className="absolute top-1 right-1 bg-red-600 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10 hover:bg-red-700"
+            aria-label="Delete style"
+        >
+            <TrashIcon className="w-4 h-4" />
+        </button>
         <h4 className="font-bold text-sm text-slate-800 dark:text-slate-200 truncate">{style.name}</h4>
     </div>
 );
 
 export const ProjectDetail: React.FC<ProjectDetailProps> = ({ onLaunchTool, onBackToHub, onCreateStoryboard }) => {
-    const { activeProject, deleteProject } = useProjects();
+    const { activeProject, deleteProject, deleteAsset } = useProjects();
     
     if (!activeProject) {
         return (
@@ -136,7 +157,7 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({ onLaunchTool, onBa
                         </h2>
                         {activeProject.characterSheet && activeProject.characterSheet.length > 0 ? (
                             <div className="flex space-x-4 overflow-x-auto pb-2 -mb-2">
-                                {activeProject.characterSheet.map(char => <CharacterCard key={char.id} character={char} />)}
+                                {activeProject.characterSheet.map(char => <CharacterCard key={char.id} character={char} onDelete={deleteAsset} />)}
                             </div>
                         ) : (
                             <p className="text-slate-500 dark:text-slate-400">No characters yet. Go to the Image Editor to create and save one!</p>
@@ -150,7 +171,7 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({ onLaunchTool, onBa
                         </h2>
                         {activeProject.stylePalette && activeProject.stylePalette.length > 0 ? (
                             <div className="flex space-x-4 overflow-x-auto pb-2 -mb-2">
-                                {activeProject.stylePalette.map(style => <StyleCard key={style.id} style={style} />)}
+                                {activeProject.stylePalette.map(style => <StyleCard key={style.id} style={style} onDelete={deleteAsset} />)}
                             </div>
                         ) : (
                             <p className="text-slate-500 dark:text-slate-400">No styles saved. Go to the Image Editor to save a visual style!</p>
@@ -165,7 +186,7 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({ onLaunchTool, onBa
                                     <div key={type}>
                                         <h3 className="text-lg font-semibold text-slate-600 dark:text-slate-300 mb-3 capitalize border-b border-slate-200 dark:border-slate-700 pb-2">{type}s</h3>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                                            {assetsByType[type].map(asset => <AssetCard key={asset.id} asset={asset} onCreateStoryboard={onCreateStoryboard} />)}
+                                            {assetsByType[type].map(asset => <AssetCard key={asset.id} asset={asset} onCreateStoryboard={onCreateStoryboard} onDelete={deleteAsset} />)}
                                         </div>
                                     </div>
                                 ))}

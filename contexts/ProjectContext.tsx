@@ -10,6 +10,7 @@ interface ProjectContextType {
     createProject: (name: string, description: string) => void;
     deleteProject: (id: string) => void;
     addAsset: (asset: ProjectAsset) => void;
+    deleteAsset: (assetId: string) => void; // New
     addCharacter: (characterData: Omit<Character, 'id'>) => void;
     addStyle: (styleData: Omit<Style, 'id'>) => void;
 }
@@ -70,6 +71,38 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         }));
     };
     
+    const deleteAsset = (assetId: string) => {
+        if (!activeProjectId) return;
+        if (!window.confirm('Are you sure you want to delete this asset?')) return;
+
+        setProjects(prev => prev.map(p => {
+            if (p.id === activeProjectId) {
+                const assetToDelete = p.assets.find(a => a.id === assetId);
+                if (!assetToDelete) return p;
+
+                const updatedAssets = p.assets.filter(a => a.id !== assetId);
+                let updatedCharacterSheet = p.characterSheet;
+                let updatedStylePalette = p.stylePalette;
+
+                if (assetToDelete.type === 'character') {
+                    updatedCharacterSheet = p.characterSheet.filter(c => c.id !== assetId);
+                }
+                if (assetToDelete.type === 'style') {
+                    updatedStylePalette = p.stylePalette.filter(s => s.id !== assetId);
+                }
+
+                return {
+                    ...p,
+                    assets: updatedAssets,
+                    characterSheet: updatedCharacterSheet,
+                    stylePalette: updatedStylePalette,
+                    lastModified: Date.now(),
+                };
+            }
+            return p;
+        }));
+    };
+
     const addCharacter = (characterData: Omit<Character, 'id'>) => {
         if (!activeProjectId) return;
         
@@ -135,6 +168,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         createProject,
         deleteProject,
         addAsset,
+        deleteAsset,
         addCharacter,
         addStyle,
     };

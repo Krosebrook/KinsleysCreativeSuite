@@ -1,7 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { createChat } from './services/geminiService';
+import React, { useState } from 'react';
 import { Chatbot } from './components/Chatbot';
-import type { Chat } from '@google/genai';
 import { ColoringBookGenerator } from './components/ColoringBookGenerator';
 import { ImageEditor } from './components/ImageEditor';
 import { VideoGenerator } from './components/VideoGenerator';
@@ -54,8 +52,6 @@ const AppContent: React.FC = () => {
   const [initialColoringPageImage, setInitialColoringPageImage] = useState<string | null>(null);
   const [initialColoringBookPrompt, setInitialColoringBookPrompt] = useState<string | null>(null);
   const [initialStoryForStoryboard, setInitialStoryForStoryboard] = useState<string | null>(null);
-  
-  const chatInstance = useMemo<Chat>(() => createChat(), []);
   
   const handleLaunchTool = (feature: AppFeature) => {
     if (activeProjectId) {
@@ -148,7 +144,7 @@ const AppContent: React.FC = () => {
         </div>
       </main>
       
-      <Chatbot chatInstance={chatInstance} />
+      <Chatbot />
       
       <footer className="text-center py-6 text-sm text-slate-500 dark:text-slate-400">
         <p>Created with the power of Google Gemini.</p>

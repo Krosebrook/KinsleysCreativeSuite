@@ -4,6 +4,8 @@ export interface Message {
   role: 'user' | 'model';
   text: string;
   sources?: { uri: string; title: string }[];
+  imageB64?: string;
+  mimeType?: string;
 }
 
 export type AppFeature = 'projectHub' | 'coloringBook' | 'imageEditor' | 'videoGenerator' | 'liveChat' | 'storyBooster' | 'stickerMaker' | 'storyboardGenerator';

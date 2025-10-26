@@ -1,24 +1,24 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { Message } from '../types';
-import { BotIcon, LoaderIcon, MessageSquareIcon, SendIcon, SparklesIcon, XIcon } from './icons';
-import { groundedChat } from '../services/geminiService';
-import type { Chat } from '@google/genai';
+import { BotIcon, LoaderIcon, MessageSquareIcon, SendIcon, SparklesIcon, XIcon, PaperclipIcon } from './icons';
+import { sendMessageToModel } from '../services/geminiService';
+import { useProjects } from '../contexts/ProjectContext';
+import { fileToBase64 } from '../utils/helpers';
 
-
-interface ChatbotProps {
-    chatInstance: Chat;
-}
-
-export const Chatbot: React.FC<ChatbotProps> = ({ chatInstance }) => {
+export const Chatbot: React.FC = () => {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<Message[]>([
-        { role: 'model', text: 'Hello! How can I help you be creative today?' }
+        { role: 'model', text: 'Hello! How can I help? You can ask about your project or upload an image.' }
     ]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [useGrounded, setUseGrounded] = useState(false);
     
+    const [imageToSend, setImageToSend] = useState<{ b64: string; mimeType: string; url: string } | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    const { activeProject } = useProjects();
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -30,47 +30,66 @@ export const Chatbot: React.FC<ChatbotProps> = ({ chatInstance }) => {
         }
     }, [messages, isOpen]);
     
-    const handleSend = async () => {
-        if (input.trim() === '' || isLoading) return;
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            try {
+                const b64 = await fileToBase64(file);
+                const url = URL.createObjectURL(file);
+                setImageToSend({ b64, mimeType: file.type, url });
+                if (useGrounded) {
+                    setUseGrounded(false); // Grounded search isn't compatible with images
+                }
+            } catch (error) {
+                console.error("Error processing file:", error);
+            }
+        }
+    };
 
-        const userMessage: Message = { role: 'user', text: input };
-        setMessages(prev => [...prev, userMessage]);
+    const handleSend = async () => {
+        if ((input.trim() === '' && !imageToSend) || isLoading) return;
+
+        const userMessage: Message = { 
+            role: 'user', 
+            text: input,
+            ...(imageToSend && { imageB64: imageToSend.b64, mimeType: imageToSend.mimeType })
+        };
+        
+        // Use a functional update to get the latest messages state for the API call
+        const currentMessages = [...messages, userMessage];
+        setMessages(currentMessages);
+
         const currentInput = input;
+        const currentImage = imageToSend;
+        
         setInput('');
+        setImageToSend(null);
+        if(fileInputRef.current) fileInputRef.current.value = "";
         setIsLoading(true);
 
         try {
-            if (useGrounded) {
-                const modelMessage = await groundedChat(currentInput);
-                setMessages(prev => [...prev, modelMessage]);
-            } else {
-                const response = await chatInstance.sendMessage({ message: currentInput });
-                const modelMessage: Message = { role: 'model', text: response.text };
-                setMessages(prev => [...prev, modelMessage]);
-            }
+            const modelMessage = await sendMessageToModel(
+                currentInput,
+                messages, // Pass the history *before* the new user message
+                activeProject,
+                currentImage ? { b64: currentImage.b64, mimeType: currentImage.mimeType } : null,
+                useGrounded
+            );
+            setMessages(prev => [...prev, modelMessage]);
         } catch (err) {
             let userFriendlyMessage = 'An unexpected error occurred during the chat. Please try again.';
 
             if (err instanceof Error) {
-                const message = err.message.toLowerCase();
-                if (message.includes('api key not valid')) {
-                    userFriendlyMessage = 'The API key is invalid. Please ensure it is configured correctly.';
-                } else if (message.includes('quota') || message.includes('rate limit')) {
-                    userFriendlyMessage = 'The API quota has been exceeded. Please check your usage or try again later.';
-                } else if (message.includes('safety')) {
-                    userFriendlyMessage = 'Your prompt was blocked due to safety settings. Please try rephrasing your message.';
-                } else if (message.includes('failed to fetch')) {
-                    userFriendlyMessage = 'A network error occurred. Please check your connection and try again.';
-                } else {
-                    // Fallback to the original error message for other cases, keeping it user-facing.
-                    userFriendlyMessage = `An error occurred: ${err.message}`;
-                }
+                userFriendlyMessage = `An error occurred: ${err.message}`;
             }
             
             const errorMessage: Message = { role: 'model', text: userFriendlyMessage };
             setMessages(prev => [...prev, errorMessage]);
         } finally {
             setIsLoading(false);
+            if (currentImage) {
+                URL.revokeObjectURL(currentImage.url);
+            }
         }
     };
 
@@ -106,7 +125,10 @@ export const Chatbot: React.FC<ChatbotProps> = ({ chatInstance }) => {
                 {messages.map((msg, index) => (
                     <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-[80%] p-3 rounded-2xl shadow-sm ${msg.role === 'user' ? 'bg-indigo-500 text-white rounded-br-none' : 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-bl-none'}`}>
-                            <p className="text-sm leading-relaxed">{msg.text}</p>
+                            {msg.imageB64 && msg.mimeType && (
+                                <img src={`data:${msg.mimeType};base64,${msg.imageB64}`} alt="User upload" className="mb-2 rounded-lg max-w-full h-auto" />
+                            )}
+                            {msg.text && <p className="text-sm leading-relaxed">{msg.text}</p>}
                             {msg.sources && msg.sources.length > 0 && (
                                 <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-600">
                                     <h4 className="text-xs font-semibold mb-1 text-slate-500 dark:text-slate-400">Sources:</h4>
@@ -138,12 +160,27 @@ export const Chatbot: React.FC<ChatbotProps> = ({ chatInstance }) => {
             <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-b-2xl flex-shrink-0">
                  <div className="flex items-center justify-center mb-3">
                     <label className="flex items-center space-x-2 cursor-pointer text-sm text-slate-600 dark:text-slate-300 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition">
-                        <input type="checkbox" checked={useGrounded} onChange={() => setUseGrounded(!useGrounded)} className="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-indigo-600 focus:ring-indigo-500" />
+                        <input type="checkbox" checked={useGrounded} onChange={() => setUseGrounded(!useGrounded)} className="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-indigo-600 focus:ring-indigo-500" disabled={!!imageToSend} />
                         <span>Search Web with Google</span>
                         <SparklesIcon className="h-4 w-4 text-yellow-500" />
                     </label>
                 </div>
+                 {imageToSend && (
+                    <div className="mb-2 p-2 bg-slate-100 dark:bg-slate-700 rounded-lg flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                            <img src={imageToSend.url} alt="Preview" className="w-10 h-10 object-cover rounded"/>
+                            <span className="text-sm text-slate-500 dark:text-slate-400">Image attached</span>
+                        </div>
+                        <button onClick={() => { URL.revokeObjectURL(imageToSend.url); setImageToSend(null); }} className="p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-600">
+                            <XIcon className="h-4 w-4"/>
+                        </button>
+                    </div>
+                )}
                 <div className="flex items-center space-x-2">
+                     <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept="image/*" className="hidden" />
+                     <button onClick={() => fileInputRef.current?.click()} className="p-3 bg-slate-100 dark:bg-slate-700 rounded-full hover:bg-slate-200 dark:hover:bg-slate-600 transition" aria-label="Attach image" disabled={isLoading}>
+                        <PaperclipIcon className="h-5 w-5 text-slate-600 dark:text-slate-300" />
+                    </button>
                     <input
                         type="text"
                         value={input}
@@ -155,7 +192,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ chatInstance }) => {
                     />
                     <button
                         onClick={handleSend}
-                        disabled={isLoading || input.trim() === ''}
+                        disabled={isLoading || (input.trim() === '' && !imageToSend)}
                         className="bg-indigo-600 text-white p-3 rounded-full hover:bg-indigo-700 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
                         aria-label="Send message"
                     >

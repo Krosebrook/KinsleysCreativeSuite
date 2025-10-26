@@ -1,5 +1,5 @@
-import { GoogleGenAI, Chat, Modality, Type } from "@google/genai";
-import type { Message, StoryboardScene } from "../types";
+import { GoogleGenAI, Modality, Type, Content, Part } from "@google/genai";
+import type { Message, Project, StoryboardScene } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
@@ -58,40 +58,87 @@ const handleApiError = (error: unknown, context: string): Error => {
     return new Error(userFriendlyMessage);
 };
 
-// --- Chat Functions ---
+// --- Chat Function (New unified, stateless implementation) ---
 
-export const createChat = (): Chat => {
-  return ai.chats.create({
-    model: 'gemini-flash-lite-latest',
-    config: {
-      systemInstruction: 'You are a friendly and helpful creative assistant for the Gemini Creative Suite.',
-    },
-  });
+export const sendMessageToModel = async (
+    prompt: string,
+    history: Message[],
+    project: Project | null,
+    image: { b64: string; mimeType: string } | null,
+    useGroundedSearch: boolean
+): Promise<Message> => {
+    try {
+        const model = image ? 'gemini-2.5-flash-image' : 'gemini-2.5-flash';
+        
+        const contents: Content[] = [];
+
+        // Add project context if available
+        if (project) {
+            const latestStory = project.assets.find(a => a.type === 'story');
+            if (latestStory) {
+                contents.push({
+                    role: 'user',
+                    parts: [{ text: `CONTEXT: I am working on a project. Here is the latest story draft:\n\n---\n${latestStory.data}\n---` }]
+                });
+                contents.push({
+                    role: 'model',
+                    parts: [{ text: "Understood. I have the context of your story. I will use this information to help you. How can I assist?" }]
+                });
+            }
+        }
+
+        // Add chat history
+        history.forEach(msg => {
+            if (msg.role === 'user' && msg.imageB64 && msg.mimeType) {
+                contents.push({ role: 'user', parts: [
+                    { inlineData: { data: msg.imageB64, mimeType: msg.mimeType } },
+                    { text: msg.text }
+                ]});
+            } else {
+                contents.push({ role: msg.role, parts: [{ text: msg.text }] });
+            }
+        });
+
+        // Add current user prompt (and image if it exists)
+        const userParts: Part[] = [{ text: prompt }];
+        if (image) {
+            userParts.unshift({
+                inlineData: { data: image.b64, mimeType: image.mimeType }
+            });
+        }
+        contents.push({ role: 'user', parts: userParts });
+
+        const config: any = {
+            systemInstruction: 'You are a friendly and helpful creative assistant for the Gemini Creative Suite. You are aware of the user\'s current project assets and can see images they upload. Provide concise, helpful, and creative responses.'
+        };
+        
+        // Grounded search is not compatible with image models or multi-part inputs.
+        if (useGroundedSearch && !image) {
+            config.tools = [{ googleSearch: {} }];
+            config.model = 'gemini-2.5-flash'; // Ensure grounded search uses a compatible model.
+        }
+
+        const response = await ai.models.generateContent({
+            model: model,
+            contents: contents,
+            config: config,
+        });
+
+        const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks
+            ?.map((chunk: any) => chunk.web)
+            .filter(Boolean) || [];
+
+        return {
+            role: 'model',
+            text: response.text,
+            sources: sources,
+        };
+
+    } catch (error) {
+        throw handleApiError(error, 'Chat');
+    }
 };
 
-export const groundedChat = async (message: string): Promise<Message> => {
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: message,
-      config: {
-        tools: [{googleSearch: {}}],
-      },
-    });
-
-    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks
-        ?.map((chunk: any) => chunk.web)
-        .filter(Boolean) || [];
-    
-    return {
-        role: 'model',
-        text: response.text,
-        sources: sources,
-    };
-  } catch (error) {
-    throw handleApiError(error, 'Grounded Chat');
-  }
-};
 
 // --- Story Booster Functions ---
 
@@ -168,7 +215,7 @@ export const generateStoryboardPrompts = async (storyText: string): Promise<Stor
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-pro',
-            contents: `Analyze the following story and break it down into 4 key visual scenes for a storyboard. For each scene, provide a short description, a detailed image prompt for an AI image generator, and a list of character names mentioned in that scene. Story: "${storyText}"`,
+            contents: `Analyze the following story and break it down into 3 to 5 key visual scenes for a storyboard. For each scene, provide a short description, a detailed image prompt for an AI image generator, and a list of character names mentioned in that scene. Story: "${storyText}"`,
             config: {
                 responseMimeType: "application/json",
                 responseSchema: {
