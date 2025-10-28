@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { editImage, convertImageToLineArt } from '../services/geminiService';
+import { editImage, convertImageToLineArt, generateColorPaletteFromImage, generateColorPaletteFromText } from '../services/geminiService';
 import { fileToBase64 } from '../utils/helpers';
-import { LoaderIcon, SparklesIcon, UndoIcon, RedoIcon, ImageIcon, SaveIcon, CheckIcon, XIcon, MaskIcon, VideoIcon, BrushIcon, ArrowLeftIcon, UserIcon, PaletteIcon, LayersIcon, TrashIcon, ExpandIcon, PencilIcon } from './icons';
+import { LoaderIcon, SparklesIcon, UndoIcon, RedoIcon, ImageIcon, SaveIcon, CheckIcon, XIcon, MaskIcon, VideoIcon, BrushIcon, ArrowLeftIcon, UserIcon, PaletteIcon, LayersIcon, TrashIcon, ExpandIcon, PencilIcon, PipetteIcon } from './icons';
 import { MaskingCanvas } from './MaskingCanvas';
 import type { ProjectAsset, Character, Layer } from '../types';
 import { useProjects } from '../contexts/ProjectContext';
@@ -15,7 +15,7 @@ interface ImageEditorProps {
     incomingStickerB64?: string | null;
 }
 
-type EditMode = 'prompt' | 'mask' | 'expand';
+type EditMode = 'prompt' | 'mask' | 'expand' | 'palette';
 
 export const ImageEditor: React.FC<ImageEditorProps> = ({ onBack, onSendToVideoGenerator, onConvertToColoringPage, incomingStickerB64 }) => {
     const { activeProject, addAsset, addCharacter, addStyle } = useProjects();
@@ -41,6 +41,12 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onBack, onSendToVideoG
     const [isAddCharacterModalOpen, setIsAddCharacterModalOpen] = useState(false);
     const [isAddStyleModalOpen, setIsAddStyleModalOpen] = useState(false);
 
+    // New state for palette feature
+    const [palettePrompt, setPalettePrompt] = useState('Enchanted forest at dusk');
+    const [isGeneratingPalette, setIsGeneratingPalette] = useState(false);
+    const [generatedPalette, setGeneratedPalette] = useState<string[] | null>(null);
+    const [paletteName, setPaletteName] = useState('');
+
     const currentLayer = history[historyIndex];
     const currentImageB64 = currentLayer?.imageB64;
     const imageToDisplay = previewImageB64 || currentImageB64;
@@ -64,6 +70,8 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onBack, onSendToVideoG
         setPreviewImageB64(null);
         setActiveMaskB64(null);
         setError(null);
+        setGeneratedPalette(null);
+        setPaletteName('');
     };
 
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -254,6 +262,49 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onBack, onSendToVideoG
         img.src = `data:${mimeType};base64,${currentImageB64}`;
     };
 
+    const handleGeneratePalette = async (source: 'image' | 'text') => {
+        if ((source === 'image' && (!currentImageB64 || !mimeType)) || (source === 'text' && !palettePrompt)) {
+            return;
+        }
+        setIsGeneratingPalette(true);
+        setError(null);
+        setGeneratedPalette(null);
+        try {
+            let colors: string[];
+            if (source === 'image' && currentImageB64 && mimeType) {
+                colors = await generateColorPaletteFromImage(currentImageB64, mimeType);
+            } else {
+                colors = await generateColorPaletteFromText(palettePrompt);
+            }
+            if (colors && colors.length > 0) {
+                setGeneratedPalette(colors);
+                const defaultName = source === 'text' ? palettePrompt : `Palette from ${currentLayer.name}`;
+                setPaletteName(defaultName);
+            } else {
+                throw new Error("The model did not return a valid color palette.");
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to generate palette.');
+        } finally {
+            setIsGeneratingPalette(false);
+        }
+    };
+
+    const handleSavePalette = () => {
+        if (!generatedPalette || !paletteName.trim()) return;
+        
+        const newAsset: ProjectAsset = {
+            id: Date.now().toString(),
+            type: 'colorPalette',
+            name: paletteName.trim(),
+            data: JSON.stringify(generatedPalette),
+            prompt: palettePrompt,
+        };
+        addAsset(newAsset);
+        setGeneratedPalette(null);
+        setPaletteName('');
+    };
+
     const EditModeButton: React.FC<{
         mode: EditMode;
         current: EditMode;
@@ -316,6 +367,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onBack, onSendToVideoG
                                 <EditModeButton mode="prompt" current={editMode} onClick={setEditMode}><PencilIcon className="w-4 h-4" /><span>Prompt</span></EditModeButton>
                                 <EditModeButton mode="mask" current={editMode} onClick={setEditMode}><MaskIcon className="w-4 h-4" /><span>Mask</span></EditModeButton>
                                 <EditModeButton mode="expand" current={editMode} onClick={setEditMode}><ExpandIcon className="w-4 h-4" /><span>Expand</span></EditModeButton>
+                                <EditModeButton mode="palette" current={editMode} onClick={setEditMode}><PaletteIcon className="w-4 h-4" /><span>Palette</span></EditModeButton>
                             </div>
                             
                             {editMode === 'prompt' && (
@@ -368,6 +420,74 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ onBack, onSendToVideoG
                                     <button onClick={handleExpandImage} className="w-full bg-teal-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-teal-600 transition-transform transform hover:scale-105" disabled={isLoading}>
                                         Apply Expand
                                     </button>
+                                </div>
+                            )}
+
+                            {editMode === 'palette' && (
+                                <div className="space-y-4 p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg animate-fade-in">
+                                    <h3 className="text-lg font-semibold">Generate Color Palette</h3>
+                                    
+                                    <button 
+                                        onClick={() => handleGeneratePalette('image')} 
+                                        disabled={isGeneratingPalette}
+                                        className="w-full flex items-center justify-center space-x-2 bg-sky-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-sky-600 transition disabled:bg-slate-400"
+                                    >
+                                        <PipetteIcon className="w-5 h-5" />
+                                        <span>Extract from Current Image</span>
+                                    </button>
+
+                                    <div className="space-y-2">
+                                        <input 
+                                            type="text" 
+                                            value={palettePrompt} 
+                                            onChange={e => setPalettePrompt(e.target.value)} 
+                                            placeholder="e.g., moody ocean storm" 
+                                            className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                                            disabled={isGeneratingPalette}
+                                        />
+                                        <button 
+                                            onClick={() => handleGeneratePalette('text')} 
+                                            disabled={isGeneratingPalette || !palettePrompt.trim()}
+                                            className="w-full flex items-center justify-center space-x-2 bg-teal-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-teal-600 transition disabled:bg-slate-400"
+                                        >
+                                            <SparklesIcon className="w-5 h-5" />
+                                            <span>Generate from Text</span>
+                                        </button>
+                                    </div>
+                                    
+                                    {isGeneratingPalette && (
+                                        <div className="flex justify-center items-center p-4">
+                                            <LoaderIcon className="w-6 h-6" />
+                                            <span className="ml-2">Generating Palette...</span>
+                                        </div>
+                                    )}
+                                    
+                                    {generatedPalette && (
+                                        <div className="space-y-3 pt-3 border-t border-slate-200 dark:border-slate-600">
+                                            <div className="flex justify-center h-12 rounded-lg overflow-hidden">
+                                                {generatedPalette.map((color, i) => (
+                                                    <div key={i} style={{ backgroundColor: color }} className="flex-1" title={color}></div>
+                                                ))}
+                                            </div>
+                                            <div className="flex items-center space-x-2">
+                                                <input 
+                                                    type="text" 
+                                                    value={paletteName} 
+                                                    onChange={e => setPaletteName(e.target.value)} 
+                                                    placeholder="Palette Name" 
+                                                    className="flex-1 px-3 py-1.5 bg-white dark:bg-slate-600 text-sm rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                                                />
+                                                <button 
+                                                    onClick={handleSavePalette}
+                                                    disabled={!paletteName.trim()}
+                                                    className="bg-green-600 text-white font-semibold py-1.5 px-3 rounded-md hover:bg-green-700 disabled:bg-slate-400 text-sm flex items-center space-x-1.5"
+                                                >
+                                                    <SaveIcon className="w-4 h-4" />
+                                                    <span>Save</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>

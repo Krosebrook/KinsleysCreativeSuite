@@ -4,19 +4,17 @@ import type { Message, Project, StoryboardScene, AppFeature } from "../types";
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
 /**
- * A centralized error handler for Gemini API calls.
+ * A centralized error handler for Gemini API calls. It inspects errors
+ * and returns a new Error object with a more specific, user-friendly message.
  * @param error The error caught from a try-catch block.
  * @param context A string describing the operation that failed (e.g., 'Image Editing').
  * @returns A new Error object with a user-friendly message.
  */
-const handleApiError = (error: unknown, context: string): Error => {
+export const handleApiError = (error: unknown, context: string): Error => {
     // 1. Log the original error for debugging.
     console.error(`API Error in ${context}:`, error);
 
-    // 2. Set a generic, safe default message.
-    let userFriendlyMessage = `An unexpected error occurred during ${context}. Please try again.`;
-
-    // 3. Extract a string from the unknown error type.
+    // 2. Extract a clear string from the unknown error type.
     let messageToInspect = '';
     if (error instanceof Error) {
         messageToInspect = error.message;
@@ -32,31 +30,51 @@ const handleApiError = (error: unknown, context: string): Error => {
     
     const lowerCaseMessage = messageToInspect.toLowerCase();
 
-    // 4. Check for specific, common error patterns and provide actionable feedback.
-    if (lowerCaseMessage.includes('failed to fetch')) {
-        userFriendlyMessage = 'A network error occurred. Please check your internet connection and try again.';
-    } else if (lowerCaseMessage.includes('api key not valid') || lowerCaseMessage.includes('api_key_invalid')) {
-        userFriendlyMessage = 'Your API key is invalid or missing. Please ensure it is correctly configured.';
-    } else if (lowerCaseMessage.includes('quota') || lowerCaseMessage.includes('rate limit') || lowerCaseMessage.includes('429')) {
-        userFriendlyMessage = 'You have exceeded your API quota or rate limit. Please check your usage and billing details, or try again later.';
-    } else if (lowerCaseMessage.includes('safety') || lowerCaseMessage.includes('blocked')) {
-        userFriendlyMessage = 'Your request was blocked due to safety settings. Please adjust your prompt and try again.';
-    } else if (lowerCaseMessage.includes('400 bad request') || lowerCaseMessage.includes('invalid argument')) {
-        userFriendlyMessage = `The request sent to the AI model was invalid. Please check your input and try again. Context: ${context}`;
-    } else if (lowerCaseMessage.includes('503') || lowerCaseMessage.includes('model is overloaded') || lowerCaseMessage.includes('server error')) {
-        userFriendlyMessage = 'The AI model is currently overloaded or unavailable. Please try again in a few moments.';
-    } else if (lowerCaseMessage.includes("not found")) {
-        // Special handling for Veo's key selection flow
-        if (context === 'Video Generation' || context === 'Video Extension') {
-             userFriendlyMessage = "API key not found or invalid. This can happen if the key was recently deleted. Please re-select your API key and try again.";
-        } else {
-             userFriendlyMessage = 'The requested AI model or resource was not found. This might be a configuration issue.';
-        }
+    // 3. Check for specific, common error patterns to provide actionable feedback.
+    // The order is important: more specific checks should come first.
+    
+    // For Veo: a "not found" error often means the user needs to re-select their API key.
+    if ((context === 'Video Generation' || context === 'Video Extension') && lowerCaseMessage.includes("requested entity was not found")) {
+        return new Error("API key not found or invalid. This can happen if the key was recently deleted. Please re-select your API key and try again.");
+    }
+    
+    if (lowerCaseMessage.includes('permission denied')) {
+        return new Error('Permission denied. Please ensure the application has necessary permissions (like microphone access) and try again.');
     }
 
-    // 5. Return a new Error object.
-    return new Error(userFriendlyMessage);
+    if (lowerCaseMessage.includes('api key not valid') || lowerCaseMessage.includes('api_key_invalid')) {
+        return new Error('Your API key is invalid or missing. Please ensure it is correctly configured and has the necessary permissions.');
+    }
+    
+    if (lowerCaseMessage.includes('safety') || lowerCaseMessage.includes('blocked')) {
+        return new Error('The request was blocked due to safety settings. This can be due to the prompt or image content. Please adjust and try again.');
+    }
+    
+    if (lowerCaseMessage.includes('quota') || lowerCaseMessage.includes('rate limit') || lowerCaseMessage.includes('429')) {
+        return new Error('You have exceeded your API quota or rate limit for this model. Please check your usage and billing details, or try again later.');
+    }
+
+    if (lowerCaseMessage.includes('failed to fetch')) {
+        return new Error('A network error occurred. Please check your internet connection and try again.');
+    }
+
+    if (lowerCaseMessage.includes('503') || lowerCaseMessage.includes('model is overloaded') || lowerCaseMessage.includes('server error') || lowerCaseMessage.includes('500')) {
+        return new Error('The AI model is currently overloaded or unavailable. Please try again in a few moments.');
+    }
+
+    if (lowerCaseMessage.includes('400 bad request') || lowerCaseMessage.includes('invalid argument')) {
+        // This can be a very broad error, so including the context is helpful.
+        return new Error(`The request sent to the AI model was invalid in the context of "${context}". Please check your input and try again.`);
+    }
+
+    if (lowerCaseMessage.includes("not found")) {
+        return new Error('The requested AI model or resource was not found. This might be a configuration issue in the application.');
+    }
+    
+    // 4. If no specific error is matched, return a generic message.
+    return new Error(`An unexpected error occurred during ${context}. Please try again.`);
 };
+
 
 // --- Chat Function (New unified, stateless implementation) ---
 
@@ -476,6 +494,59 @@ export const convertImageToLineArt = async (
     throw new Error("No line art image was returned from the model.");
   } catch (error) {
     throw handleApiError(error, 'Image to Line Art Conversion');
+  }
+};
+
+const colorPaletteSchema = {
+    type: Type.OBJECT,
+    properties: {
+        colors: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING, description: 'A hex color code string, e.g., "#RRGGBB".' }
+        }
+    },
+    required: ["colors"],
+};
+
+export const generateColorPaletteFromImage = async (
+  base64ImageData: string,
+  mimeType: string
+): Promise<string[]> => {
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: {
+        parts: [
+          { inlineData: { data: base64ImageData, mimeType: mimeType } },
+          { text: "Analyze this image and extract a harmonious 5-color palette. The colors should represent the main tones and mood of the image. Return the colors as a JSON object with a 'colors' key containing an array of 5 hex code strings." },
+        ]
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: colorPaletteSchema,
+      }
+    });
+    const jsonResponse = JSON.parse(response.text.trim());
+    return jsonResponse.colors || [];
+  } catch (error) {
+    throw handleApiError(error, 'Color Palette Generation from Image');
+  }
+};
+
+export const generateColorPaletteFromText = async (prompt: string): Promise<string[]> => {
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: `Generate a harmonious 5-color palette based on the following theme: "${prompt}". Return the colors as a JSON object with a 'colors' key containing an array of 5 hex code strings.`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: colorPaletteSchema,
+      }
+    });
+    const jsonResponse = JSON.parse(response.text.trim());
+    return jsonResponse.colors || [];
+  } catch (error) {
+    throw handleApiError(error, 'Color Palette Generation from Text');
   }
 };
 

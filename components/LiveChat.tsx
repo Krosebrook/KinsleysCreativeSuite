@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { decode, createBlob, decodeAudioData } from '../utils/helpers';
 import { MicIcon, StopCircleIcon, LoaderIcon } from './icons';
+import { handleApiError } from '../services/geminiService';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
@@ -205,7 +206,8 @@ export const LiveChat: React.FC = () => {
                         }
                     },
                     onerror: (e: ErrorEvent) => {
-                        setError(`An error occurred: ${e.message}. Please try again.`);
+                        const userFriendlyError = handleApiError(e.error || e, 'Live Conversation');
+                        setError(userFriendlyError.message);
                         stopRecording();
                     },
                     onclose: (e: CloseEvent) => {
@@ -224,7 +226,8 @@ export const LiveChat: React.FC = () => {
             sessionPromiseRef.current = sessionPromise;
 
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to start recording.');
+            const userFriendlyError = handleApiError(err, 'Live Conversation Setup');
+            setError(userFriendlyError.message);
             setIsConnecting(false);
             stopRecording();
         }

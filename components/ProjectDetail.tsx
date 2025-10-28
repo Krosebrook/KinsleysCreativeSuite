@@ -26,6 +26,29 @@ const features = Object.keys(featureMap) as Exclude<AppFeature, 'projectHub' | '
 const AssetCard: React.FC<{ asset: ProjectAsset, onCreateStoryboard: (storyText: string) => void, onDelete: (id: string) => void }> = ({ asset, onCreateStoryboard, onDelete }) => {
     const isImage = ['image', 'sticker', 'character', 'style'].includes(asset.type);
     
+    const renderAssetPreview = () => {
+        if (isImage) {
+            return <img src={`data:image/png;base64,${asset.data}`} alt={asset.name} className="w-full h-full object-cover" />;
+        }
+        if (asset.type === 'audio') {
+            return <Volume2Icon className="w-12 h-12 text-slate-400 dark:text-slate-500" />;
+        }
+        if (asset.type === 'colorPalette') {
+            const colors: string[] = JSON.parse(asset.data);
+            return (
+                <div className="w-full h-full flex">
+                    {colors.map((color, i) => (
+                        <div key={i} style={{ backgroundColor: color }} className="flex-1" title={color}></div>
+                    ))}
+                </div>
+            );
+        }
+        // Fallback for other types like 'story', 'video' etc. which don't have a preview here
+        return null;
+    };
+
+    const hasPreview = isImage || asset.type === 'audio' || asset.type === 'colorPalette';
+    
     return (
         <div className="bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow flex flex-col relative group">
              <button 
@@ -35,19 +58,14 @@ const AssetCard: React.FC<{ asset: ProjectAsset, onCreateStoryboard: (storyText:
             >
                 <TrashIcon className="w-4 h-4" />
             </button>
-            {isImage && (
-                <div className="w-full h-32 bg-slate-200 dark:bg-slate-700 rounded-md mb-3 overflow-hidden">
-                    <img src={`data:image/png;base64,${asset.data}`} alt={asset.name} className="w-full h-full object-cover" />
-                </div>
-            )}
-            {asset.type === 'audio' && (
-                 <div className="w-full h-32 bg-slate-200 dark:bg-slate-700 rounded-md mb-3 flex items-center justify-center">
-                    <Volume2Icon className="w-12 h-12 text-slate-400 dark:text-slate-500" />
+            {hasPreview && (
+                <div className={`w-full h-32 bg-slate-200 dark:bg-slate-700 rounded-md mb-3 overflow-hidden ${asset.type === 'audio' ? 'flex items-center justify-center' : ''}`}>
+                    {renderAssetPreview()}
                 </div>
             )}
             <div className="flex-grow">
                 <h4 className="font-bold text-slate-800 dark:text-slate-200 truncate">{asset.name}</h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 capitalize">{asset.type}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 capitalize">{asset.type.replace('colorPalette', 'Color Palette')}</p>
                 <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{new Date(parseInt(asset.id)).toLocaleString()}</p>
             </div>
             {asset.type === 'story' && (
@@ -222,7 +240,7 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({ onLaunchTool, onBa
                             <div className="space-y-6">
                                 {Object.keys(assetsByType).map((type) => (
                                     <div key={type}>
-                                        <h3 className="text-lg font-semibold text-slate-600 dark:text-slate-300 mb-3 capitalize border-b border-slate-200 dark:border-slate-700 pb-2">{type}s</h3>
+                                        <h3 className="text-lg font-semibold text-slate-600 dark:text-slate-300 mb-3 capitalize border-b border-slate-200 dark:border-slate-700 pb-2">{type.replace('colorPalette', 'Color Palettes')}s</h3>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                                             {assetsByType[type].map(asset => <AssetCard key={asset.id} asset={asset} onCreateStoryboard={onCreateStoryboard} onDelete={deleteAsset} />)}
                                         </div>

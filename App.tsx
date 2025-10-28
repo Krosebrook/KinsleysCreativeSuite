@@ -117,6 +117,20 @@ const AppContent: React.FC = () => {
     setActiveFeature('narrationTool');
   };
 
+  const handleLaunchFromHub = (projectId: string, feature: AppFeature) => {
+    // Clear any stale initial data when launching a tool from hub
+    setInitialVideoGeneratorImage(null);
+    setStickerToSendToEditor(null);
+    setInitialColoringPageImage(null);
+    setInitialColoringBookPrompt(null);
+    setInitialStoryForStoryboard(null);
+    setInitialTextForNarration(null);
+    
+    // Set both states, React will batch these for a single re-render
+    setActiveProjectId(projectId);
+    setActiveFeature(feature);
+  };
+
   const renderContent = () => {
     if (activeProjectId && activeProject) {
         if (activeFeature) {
@@ -134,7 +148,7 @@ const AppContent: React.FC = () => {
         }
         return <ProjectDetail onLaunchTool={handleLaunchTool} onBackToHub={handleBackToHub} onCreateStoryboard={handleCreateStoryboardFromStory} />;
     }
-    return <ProjectHub />;
+    return <ProjectHub onLaunchTool={handleLaunchFromHub} />;
   };
   
   return (

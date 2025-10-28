@@ -45,7 +45,7 @@ export interface Layer {
   imageB64: string;
 }
 
-export type AssetType = 'story' | 'image' | 'sticker' | 'video' | 'coloringBookPdf' | 'character' | 'style' | 'audio';
+export type AssetType = 'story' | 'image' | 'sticker' | 'video' | 'coloringBookPdf' | 'character' | 'style' | 'audio' | 'colorPalette';
 
 export interface ProjectAsset {
   id: string; // e.g., timestamp
