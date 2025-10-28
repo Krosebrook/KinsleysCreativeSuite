@@ -13,6 +13,7 @@ interface ProjectContextType {
     deleteAsset: (assetId: string) => void; // New
     addCharacter: (characterData: Omit<Character, 'id'>) => void;
     addStyle: (styleData: Omit<Style, 'id'>) => void;
+    save: () => void;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
@@ -32,6 +33,10 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
     const activeProject = useMemo(() => {
         return projects.find(p => p.id === activeProjectId) || null;
     }, [projects, activeProjectId]);
+
+    const handleSave = () => {
+        saveProjects(projects);
+    };
 
     const createProject = (name: string, description: string) => {
         const newProject: Project = {
@@ -171,6 +176,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         deleteAsset,
         addCharacter,
         addStyle,
+        save: handleSave,
     };
 
     return <ProjectContext.Provider value={value}>{children}</ProjectContext.Provider>;

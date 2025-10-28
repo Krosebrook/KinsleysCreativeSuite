@@ -5,13 +5,13 @@ import { useProjects } from '../contexts/ProjectContext';
 import { CreateProjectModal } from './modals/CreateProjectModal';
 
 const ProjectCard: React.FC<{ project: Project; onSelect: () => void }> = ({ project, onSelect }) => {
-    const firstImageAsset = project.assets.find(a => a.type === 'image');
+    const recentImageAsset = project.assets.find(a => ['image', 'sticker', 'character', 'style'].includes(a.type));
     
     return (
         <button onClick={onSelect} className="w-full text-left bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-lg hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900">
             <div className="h-40 bg-slate-100 dark:bg-slate-700 rounded-lg mb-4 flex items-center justify-center overflow-hidden">
-                {firstImageAsset ? (
-                    <img src={`data:image/png;base64,${firstImageAsset.data}`} alt="Project preview" className="w-full h-full object-cover" />
+                {recentImageAsset ? (
+                    <img src={`data:image/png;base64,${recentImageAsset.data}`} alt="Project preview" className="w-full h-full object-cover" />
                 ) : (
                     <FolderKanbanIcon className="w-16 h-16 text-slate-400 dark:text-slate-500" />
                 )}

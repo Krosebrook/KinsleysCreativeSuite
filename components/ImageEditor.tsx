@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { editImage, convertImageToLineArt } from '../services/geminiService';
 import { fileToBase64 } from '../utils/helpers';
-// FIX: Added 'PencilIcon' to the import list.
 import { LoaderIcon, SparklesIcon, UndoIcon, RedoIcon, ImageIcon, SaveIcon, CheckIcon, XIcon, MaskIcon, VideoIcon, BrushIcon, ArrowLeftIcon, UserIcon, PaletteIcon, LayersIcon, TrashIcon, ExpandIcon, PencilIcon } from './icons';
 import { MaskingCanvas } from './MaskingCanvas';
 import type { ProjectAsset, Character, Layer } from '../types';

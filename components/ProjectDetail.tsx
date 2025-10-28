@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { ProjectAsset, AppFeature, Character, Style } from '../types';
 import { useProjects } from '../contexts/ProjectContext';
 import { 
     ArrowLeftIcon, BrushIcon, ImageIcon, VideoIcon, MicIcon, BookOpenIcon, StickerIcon, TrashIcon,
-    SparklesIcon, UserIcon, ClapperboardIcon, PaletteIcon, Volume2Icon
+    SparklesIcon, UserIcon, ClapperboardIcon, PaletteIcon, Volume2Icon, SaveIcon, CheckIcon
 } from './icons';
 
 interface ProjectDetailProps {
@@ -96,7 +96,17 @@ const StyleCard: React.FC<{ style: Style, onDelete: (id: string) => void }> = ({
 );
 
 export const ProjectDetail: React.FC<ProjectDetailProps> = ({ onLaunchTool, onBackToHub, onCreateStoryboard }) => {
-    const { activeProject, deleteProject, deleteAsset } = useProjects();
+    const { activeProject, deleteProject, deleteAsset, save } = useProjects();
+    const [saveStatus, setSaveStatus] = useState<'idle' | 'saving'>('idle');
+
+    const handleSave = () => {
+        if (saveStatus === 'saving') return;
+        setSaveStatus('saving');
+        save();
+        setTimeout(() => {
+            setSaveStatus('idle');
+        }, 2000); // Show "Saved!" for 2 seconds
+    };
     
     if (!activeProject) {
         return (
@@ -131,10 +141,32 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({ onLaunchTool, onBa
                     <h1 className="text-4xl md:text-5xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">{activeProject.name}</h1>
                     <p className="mt-2 text-lg text-slate-600 dark:text-slate-400 max-w-2xl">{activeProject.description}</p>
                 </div>
-                <button onClick={() => deleteProject(activeProject.id)} className="flex items-center space-x-2 text-sm font-semibold text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition bg-red-100 dark:bg-red-900/30 px-3 py-2 rounded-lg">
-                    <TrashIcon className="w-4 h-4" />
-                    <span>Delete Project</span>
-                </button>
+                 <div className="flex items-center space-x-2">
+                   <button 
+                       onClick={handleSave} 
+                       className={`flex items-center space-x-2 text-sm font-semibold px-3 py-2 rounded-lg transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-slate-900 ${
+                            saveStatus === 'saving' 
+                            ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 focus:ring-green-500 scale-105' 
+                            : 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-900 focus:ring-indigo-500'
+                        }`}
+                   >
+                       {saveStatus === 'saving' ? (
+                           <>
+                               <CheckIcon className="w-4 h-4" />
+                               <span>Project Saved!</span>
+                           </>
+                       ) : (
+                           <>
+                               <SaveIcon className="w-4 h-4" />
+                               <span>Save Project</span>
+                           </>
+                       )}
+                   </button>
+                   <button onClick={() => deleteProject(activeProject.id)} className="flex items-center space-x-2 text-sm font-semibold text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition bg-red-100 dark:bg-red-900/30 px-3 py-2 rounded-lg">
+                       <TrashIcon className="w-4 h-4" />
+                       <span>Delete Project</span>
+                   </button>
+               </div>
             </header>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
