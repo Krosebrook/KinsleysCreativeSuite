@@ -27,8 +27,11 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({ initialImage }) 
     const [progressMessage, setProgressMessage] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [videoClips, setVideoClips] = useState<VideoClip[]>([]);
+    const [selectedClipIndex, setSelectedClipIndex] = useState<number | null>(null);
     
     const latestClip = videoClips.length > 0 ? videoClips[videoClips.length - 1] : null;
+    const displayedClipIndex = selectedClipIndex ?? (videoClips.length > 0 ? videoClips.length - 1 : null);
+    const displayedClip = displayedClipIndex !== null ? videoClips[displayedClipIndex] : null;
 
     const checkApiKey = async () => {
         if (window.aistudio) {
@@ -54,6 +57,7 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({ initialImage }) 
         setSourceImageFile(null);
         setSourceImageUrl(null);
         setVideoClips([]);
+        setSelectedClipIndex(null);
         setError(null);
         setProgressMessage('');
         setIsLoading(false);
@@ -116,6 +120,7 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({ initialImage }) 
                 (message) => setProgressMessage(message)
             );
             setVideoClips([{ url: videoUrl, videoObject, prompt }]);
+            setSelectedClipIndex(0);
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
             setError(errorMessage);
@@ -143,7 +148,12 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({ initialImage }) 
                 aspectRatio,
                 (message) => setProgressMessage(message)
             );
-            setVideoClips(prev => [...prev, { url: videoUrl, videoObject, prompt: extensionPrompt }]);
+            const newClip = { url: videoUrl, videoObject, prompt: extensionPrompt };
+            setVideoClips(prev => {
+                const newClips = [...prev, newClip];
+                setSelectedClipIndex(newClips.length - 1);
+                return newClips;
+            });
             setExtensionPrompt('');
         } catch (err) {
              const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
@@ -225,7 +235,7 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({ initialImage }) 
                                 <form onSubmit={handleExtendVideo} className="space-y-4 p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
                                     <div>
                                         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Next Scene Prompt</label>
-                                        <textarea value={extensionPrompt} onChange={(e) => setExtensionPrompt(e.target.value)} rows={3} className="w-full input-style" disabled={isExtending || isLoading} required />
+                                        <textarea value={extensionPrompt} onChange={(e) => setExtensionPrompt(e.target.value)} placeholder="e.g., The camera pans to reveal..." rows={3} className="w-full input-style" disabled={isExtending || isLoading} required />
                                     </div>
                                     <button type="submit" className="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-transform hover:scale-105 disabled:bg-slate-400 dark:disabled:bg-slate-600 flex items-center justify-center space-x-2 shadow-lg" disabled={isExtending || isLoading}>
                                         {isExtending ? (<><LoaderIcon className="h-5 w-5" /><span>Extending...</span></>) : (<><SparklesIcon className="h-5 w-5" /><span>Generate Extension (7s)</span></>)}
@@ -241,26 +251,29 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({ initialImage }) 
                             <div className="text-center text-slate-500 dark:text-slate-400"><LoaderIcon className="w-12 h-12 mx-auto mb-4" /><p className="font-semibold">{progressMessage}</p><p className="text-sm mt-2 max-w-xs">Video generation can take several minutes.</p></div>
                         ) : error ? (
                             <div className="w-full p-4 bg-red-100 border-l-4 border-red-500 text-red-800 rounded-r-lg"><div className="flex justify-between items-start"><div><p className="font-bold text-lg">Error</p><p className="mt-1 text-sm">{error}</p></div><button onClick={() => setError(null)} className="-mt-1 -mr-1 p-1 rounded-full hover:bg-red-200"><XIcon className="h-5 w-5" /></button></div></div>
-                        ) : latestClip ? (
+                        ) : displayedClip && displayedClipIndex !== null ? (
                              <div className="w-full text-center">
                                 <h3 className="text-2xl font-bold text-slate-800 dark:text-slate-200 mb-4">
-                                    {videoClips.length > 1 ? `Latest Clip (${videoClips.length} of ${videoClips.length})` : 'Generated Video'}
+                                    {`Clip ${displayedClipIndex + 1} of ${videoClips.length}`}
                                 </h3>
-                                <video key={latestClip.url} src={latestClip.url} controls autoPlay loop className="w-full rounded-lg shadow-md bg-black" />
+                                <video key={displayedClip.url} src={displayedClip.url} controls autoPlay loop className="w-full rounded-lg shadow-md bg-black" />
+                                <p className="text-sm mt-2 text-slate-500 dark:text-slate-400 italic">Prompt: "{displayedClip.prompt}"</p>
                                 
-                                {videoClips.length > 0 && (
-                                     <a href={latestClip.url} download={`gemini-clip-${videoClips.length}.webm`} className="inline-block mt-4 bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700 transition">Download Latest Clip</a>
-                                )}
+                                <a href={displayedClip.url} download={`gemini-clip-${displayedClipIndex + 1}.mp4`} className="inline-block mt-4 bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700 transition">Download Clip {displayedClipIndex + 1}</a>
                                
                                 {videoClips.length > 1 && (
                                     <div className="mt-6">
                                         <h4 className="text-lg font-semibold text-slate-700 dark:text-slate-300 text-left mb-2">Video Sequence</h4>
                                         <div className="flex space-x-2 overflow-x-auto p-2 bg-slate-100 dark:bg-slate-700/50 rounded-lg">
                                             {videoClips.map((clip, index) => (
-                                                <div key={index} className="flex-shrink-0 text-center w-36">
-                                                    <video src={clip.url} className="w-full h-20 object-cover rounded-md bg-black" preload="metadata" muted playsInline></video>
+                                                <button 
+                                                    key={index}
+                                                    onClick={() => setSelectedClipIndex(index)}
+                                                    className={`flex-shrink-0 text-center w-36 p-1 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${selectedClipIndex === index ? 'bg-indigo-200 dark:bg-indigo-900' : 'bg-transparent hover:bg-slate-200 dark:hover:bg-slate-600'}`}
+                                                >
+                                                    <video src={clip.url} className="w-full h-20 object-cover rounded-md bg-black pointer-events-none" preload="metadata" muted playsInline></video>
                                                     <p className="text-xs mt-1 text-slate-600 dark:text-slate-400 truncate px-1" title={clip.prompt}>Clip {index + 1}</p>
-                                                </div>
+                                                </button>
                                             ))}
                                         </div>
                                     </div>
